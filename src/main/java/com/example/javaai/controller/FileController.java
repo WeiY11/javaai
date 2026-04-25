@@ -1,6 +1,11 @@
 package com.example.javaai.controller;
 
+import com.example.javaai.config.AnalysisProperties;
+import com.example.javaai.extractor.ExtractionResult;
+import com.example.javaai.model.AnalysisResult;
+import com.example.javaai.service.AnalysisResultService;
 import com.example.javaai.service.ChatService;
+import com.example.javaai.service.FileExtractorService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -9,6 +14,7 @@ import reactor.core.publisher.Flux;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -20,9 +26,18 @@ public class FileController {
     private String baseDir;
 
     private final ChatService chatService;
+    private final FileExtractorService fileExtractorService;
+    private final AnalysisResultService analysisResultService;
+    private final AnalysisProperties analysisProperties;
 
-    public FileController(ChatService chatService) {
+    public FileController(ChatService chatService,
+                          FileExtractorService fileExtractorService,
+                          AnalysisResultService analysisResultService,
+                          AnalysisProperties analysisProperties) {
         this.chatService = chatService;
+        this.fileExtractorService = fileExtractorService;
+        this.analysisResultService = analysisResultService;
+        this.analysisProperties = analysisProperties;
     }
 
     /**
@@ -54,7 +69,6 @@ public class FileController {
 
         if (children != null) {
             for (File f : children) {
-                // 跳过隐藏文件和目录 (如 .git, .vscode 等)
                 if (f.getName().startsWith(".") || f.getName().equals("__pycache__")) {
                     continue;
                 }
@@ -66,7 +80,6 @@ public class FileController {
                 item.put("path", Paths.get(baseDir).toAbsolutePath().normalize()
                         .relativize(f.toPath().toAbsolutePath().normalize()).toString().replace("\\", "/"));
 
-                // 判断文件类型分类
                 if (f.isDirectory()) {
                     item.put("category", "folder");
                 } else {
@@ -79,13 +92,14 @@ public class FileController {
                     else if (name.endsWith(".md")) item.put("category", "markdown");
                     else if (name.endsWith(".py")) item.put("category", "python");
                     else if (name.endsWith(".pdf")) item.put("category", "pdf");
+                    else if (name.endsWith(".xlsx") || name.endsWith(".xls")) item.put("category", "excel");
+                    else if (name.endsWith(".docx")) item.put("category", "word");
                     else item.put("category", "other");
                 }
                 items.add(item);
             }
         }
 
-        // 默认排序：目录优先，然后按名称
         items.sort((a, b) -> {
             boolean aDir = (boolean) a.get("isDir");
             boolean bDir = (boolean) b.get("isDir");
@@ -117,31 +131,48 @@ public class FileController {
         result.put("size", file.length());
         result.put("path", filePath);
 
+        // 图片文件
         if (name.endsWith(".png") || name.endsWith(".jpg")) {
-            // 图片返回 base64
             byte[] bytes = Files.readAllBytes(target);
             String base64 = Base64.getEncoder().encodeToString(bytes);
             String mime = name.endsWith(".png") ? "image/png" : "image/jpeg";
             result.put("type", "image");
             result.put("content", "data:" + mime + ";base64," + base64);
-        } else if (name.endsWith(".pt") || name.endsWith(".pth") || name.endsWith(".pdf")) {
-            // 二进制文件不读取内容
+            return result;
+        }
+
+        // 纯二进制文件
+        if (name.endsWith(".pt") || name.endsWith(".pth")) {
             result.put("type", "binary");
             result.put("content", "[二进制文件，大小: " + formatSize(file.length()) + "]");
-        } else {
-            // 文本文件直接读取 (JSON, CSV, MD, PY, TEX 等)
-            String content = Files.readString(target);
-            // 限制最大返回 500KB 文本
-            if (content.length() > 512000) {
-                content = content.substring(0, 512000) + "\n... [内容已截断，文件过大]";
-            }
-            if (name.endsWith(".json")) result.put("type", "json");
-            else if (name.endsWith(".csv")) result.put("type", "csv");
-            else if (name.endsWith(".md")) result.put("type", "markdown");
-            else result.put("type", "text");
-
-            result.put("content", content);
+            return result;
         }
+
+        // 使用提取器服务
+        ExtractionResult extraction = fileExtractorService.extractFile(target, analysisProperties.getMaxContentSize());
+        if (extraction.isSuccess()) {
+            if ("image-base64".equals(extraction.getContentType())) {
+                result.put("type", "image");
+            } else if ("structured-text".equals(extraction.getContentType())) {
+                result.put("type", "structured");
+            } else {
+                if (name.endsWith(".json")) result.put("type", "json");
+                else if (name.endsWith(".csv")) result.put("type", "csv");
+                else if (name.endsWith(".md")) result.put("type", "markdown");
+                else if (name.endsWith(".pdf")) result.put("type", "pdf");
+                else if (name.endsWith(".xlsx") || name.endsWith(".xls")) result.put("type", "excel");
+                else if (name.endsWith(".docx")) result.put("type", "word");
+                else result.put("type", "text");
+            }
+            result.put("content", extraction.getContent());
+            if (extraction.getMetadata() != null && !extraction.getMetadata().isEmpty()) {
+                result.put("metadata", extraction.getMetadata());
+            }
+        } else {
+            result.put("type", "error");
+            result.put("content", extraction.getErrorMessage());
+        }
+
         return result;
     }
 
@@ -162,14 +193,21 @@ public class FileController {
         }
 
         String name = file.getName().toLowerCase();
-        if (name.endsWith(".pt") || name.endsWith(".pth") || name.endsWith(".pdf")) {
-            return Flux.just("该文件为二进制文件，无法直接进行文本分析。");
+
+        // 纯二进制文件无法分析
+        if (name.endsWith(".pt") || name.endsWith(".pth")) {
+            return Flux.just("该文件为二进制模型文件，无法直接进行文本分析。");
         }
 
-        String content = Files.readString(target);
-        // 限制发送给 AI 的内容长度
-        if (content.length() > 100000) {
-            content = content.substring(0, 100000) + "\n... [内容已截断]";
+        // 使用提取器获取内容
+        ExtractionResult extraction = fileExtractorService.extractFile(target, analysisProperties.getMaxPromptSize());
+        if (!extraction.isSuccess()) {
+            return Flux.just("无法提取文件内容: " + extraction.getErrorMessage());
+        }
+
+        String content = extraction.getContent();
+        if (content.length() > analysisProperties.getMaxPromptSize()) {
+            content = content.substring(0, analysisProperties.getMaxPromptSize()) + "\n... [内容已截断]";
         }
 
         String prompt = String.format(
@@ -182,7 +220,42 @@ public class FileController {
             file.getName(), content
         );
 
-        return chatService.streamChat(provider, prompt, sessionId);
+        // 获取文件分类
+        String category = getFileCategory(name);
+
+        // 流式返回，完成后异步保存结果
+        StringBuilder resultContent = new StringBuilder();
+        return chatService.streamChat(provider, prompt, sessionId)
+            .doOnNext(resultContent::append)
+            .doOnComplete(() -> {
+                try {
+                    AnalysisResult analysisResult = new AnalysisResult(
+                        UUID.randomUUID().toString(),
+                        filePath,
+                        file.getName(),
+                        provider,
+                        sessionId,
+                        LocalDateTime.now(),
+                        resultContent.toString(),
+                        file.length(),
+                        category
+                    );
+                    analysisResultService.saveResult(analysisResult);
+                } catch (Exception ignored) {}
+            });
+    }
+
+    private String getFileCategory(String name) {
+        if (name.endsWith(".json")) return "json";
+        if (name.endsWith(".csv")) return "csv";
+        if (name.endsWith(".pdf")) return "pdf";
+        if (name.endsWith(".xlsx") || name.endsWith(".xls")) return "excel";
+        if (name.endsWith(".docx")) return "word";
+        if (name.endsWith(".md")) return "markdown";
+        if (name.endsWith(".py")) return "python";
+        if (name.endsWith(".tex")) return "latex";
+        if (name.endsWith(".png") || name.endsWith(".jpg")) return "image";
+        return "other";
     }
 
     private String formatSize(long bytes) {

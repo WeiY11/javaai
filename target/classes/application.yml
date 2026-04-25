@@ -31,5 +31,14 @@ custom:
   data:
     base-dir: D:/paper2_MADOP
 
+  # 文件分析配置
+  analysis:
+    max-content-size: 512000
+    max-prompt-size: 100000
+    batch-max-files: 20
+    result-dir: .analysis-results
+    report-dir: .analysis-reports
+    pdf-font-path: ""
+
 server:
   port: 8080
