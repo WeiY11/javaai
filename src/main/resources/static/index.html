@@ -3,21 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spring AI Chat</title>
-    <!-- 引入 Google Fonts -->
+    <title>Spring AI Chat - Multi Model</title>
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Highlight.js 的暗黑风格样式 (Atom One Dark) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="chat-container">
         <header class="chat-header">
-            <h1>Spring AI Assistant</h1>
-            <p class="status">● Online</p>
+            <div class="header-title">
+                <h1>Spring AI Assistant</h1>
+                <p class="status">● Online</p>
+            </div>
+            
+            <div class="model-selector">
+                <select id="modelSelect">
+                    <option value="deepseek" selected>DeepSeek (深度求索)</option>
+                    <option value="zhipu">Zhipu (智谱清言)</option>
+                    <option value="qianwen">Qianwen (通义千问)</option>
+                    <option value="openai">OpenAI (ChatGPT)</option>
+                </select>
+            </div>
         </header>
         
         <div class="chat-messages" id="chatMessages">
             <div class="message ai-message">
-                <div class="message-content">你好！我是由 Spring AI 驱动的智能助手。我可以无缝对接智谱清言、通义千问等大模型，今天我能帮您做什么？</div>
+                <div class="message-content markdown-body">
+<p>你好！我是由 Spring AI 驱动的智能助手。现在我已经升级了以下功能：</p>
+<ul>
+    <li>🚀 <strong>多模型切换</strong>：请在右上角选择您想使用的模型。</li>
+    <li>🧠 <strong>上下文记忆</strong>：我已经拥有了对话历史记忆功能。</li>
+    <li>✨ <strong>Markdown 渲染</strong>：我现在可以输出漂亮的代码高亮和排版了！</li>
+</ul>
+<p>今天我能帮您做什么？</p>
+                </div>
             </div>
         </div>
         
@@ -31,6 +54,13 @@
             </button>
         </div>
     </div>
+    
+    <!-- Marked.js 用于解析 Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Highlight.js 用于代码高亮 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- DOMPurify 防御 XSS 攻击 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     
     <script src="script.js"></script>
 </body>

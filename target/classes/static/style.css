@@ -16,7 +16,7 @@ body {
 
 .chat-container {
     width: 100%;
-    max-width: 800px;
+    max-width: 900px;
     height: 90vh;
     background: rgba(30, 41, 59, 0.7);
     backdrop-filter: blur(16px);
@@ -30,7 +30,7 @@ body {
 }
 
 .chat-header {
-    padding: 20px 30px;
+    padding: 15px 30px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(15, 23, 42, 0.5);
     display: flex;
@@ -38,7 +38,7 @@ body {
     align-items: center;
 }
 
-.chat-header h1 {
+.header-title h1 {
     font-size: 1.25rem;
     font-weight: 600;
     background: linear-gradient(to right, #38bdf8, #818cf8);
@@ -47,11 +47,36 @@ body {
 }
 
 .status {
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     color: #10b981;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+/* 模型下拉框样式 */
+.model-selector select {
+    background: rgba(15, 23, 42, 0.8);
+    color: #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%22//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23e2e8f0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right .7rem top 50%;
+    background-size: .65rem auto;
+    padding-right: 2rem;
+}
+
+.model-selector select:hover {
+    border-color: #38bdf8;
+    background-color: rgba(30, 41, 59, 0.9);
 }
 
 .chat-messages {
@@ -65,7 +90,7 @@ body {
 
 .message {
     display: flex;
-    max-width: 80%;
+    max-width: 85%;
     animation: fadeIn 0.3s ease-out;
 }
 
@@ -78,7 +103,7 @@ body {
     padding: 16px 20px;
     border-radius: 20px;
     font-size: 0.95rem;
-    line-height: 1.5;
+    line-height: 1.6;
     word-wrap: break-word;
 }
 
@@ -103,15 +128,67 @@ body {
     border-bottom-left-radius: 4px;
 }
 
+/* ===== Markdown 渲染样式覆盖 ===== */
+.markdown-body {
+    color: #e2e8f0;
+}
+
+.markdown-body p {
+    margin-bottom: 0.8em;
+}
+.markdown-body p:last-child {
+    margin-bottom: 0;
+}
+
+.markdown-body ul, .markdown-body ol {
+    margin-bottom: 0.8em;
+    padding-left: 1.5em;
+}
+
+.markdown-body li {
+    margin-bottom: 0.3em;
+}
+
+.markdown-body pre {
+    background: #1e1e1e !important; /* 配合 hljs 的深色背景 */
+    border-radius: 8px;
+    padding: 12px;
+    margin: 10px 0;
+    overflow-x: auto;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.markdown-body code {
+    font-family: 'Courier New', Courier, monospace;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.markdown-body pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.85em;
+}
+
+.markdown-body blockquote {
+    border-left: 4px solid #38bdf8;
+    padding-left: 10px;
+    margin-left: 0;
+    color: #94a3b8;
+}
+
 /* 闪烁光标效果（打字机用） */
 .cursor-blink {
     display: inline-block;
-    width: 2px;
+    width: 6px;
     height: 1.2em;
     background-color: #38bdf8;
-    vertical-align: middle;
+    vertical-align: text-bottom;
     margin-left: 2px;
     animation: blink 1s step-end infinite;
+    border-radius: 2px;
 }
 
 @keyframes blink {
@@ -145,10 +222,6 @@ body {
     box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 
-#userInput::placeholder {
-    color: #64748b;
-}
-
 .send-button {
     background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
     border: none;
@@ -169,27 +242,9 @@ body {
     box-shadow: 0 10px 20px rgba(56, 189, 248, 0.4);
 }
 
-.send-button:active {
-    transform: scale(0.95);
-}
-
-.send-button svg {
-    width: 20px;
-    height: 20px;
-}
-
 .send-button:disabled {
     background: #475569;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
-}
-
-/* 响应式调整 */
-@media (max-width: 768px) {
-    .chat-container {
-        height: 100vh;
-        border-radius: 0;
-        border: none;
-    }
 }

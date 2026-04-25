@@ -1,22 +1,31 @@
 spring:
   application:
     name: javaai
+
+# 自定义多模型配置
+custom:
   ai:
-    openai:
-      # DeepSeek API Key
-      api-key: sk-75262ec5d9544471890532d12d6b2d32
-      
-      # ==========================================
-      # 切换大模型时，只需修改下面激活的 base-url 和 model
-      # ==========================================
-      
-      # 【当前激活：DeepSeek (深度求索)】
-      base-url: https://api.deepseek.com
-      chat:
-        options:
-          # deepseek-chat 是标准的对话模型
-          model: deepseek-chat
-          temperature: 0.7
+    providers:
+      deepseek:
+        base-url: https://api.deepseek.com
+        api-key: sk-75262ec5d9544471890532d12d6b2d32
+        model: deepseek-chat
+        temperature: 0.7
+      zhipu:
+        base-url: https://open.bigmodel.cn/api/paas/v4/
+        api-key: your-zhipu-key # 请填入您的智谱 API Key
+        model: glm-4
+        temperature: 0.7
+      qianwen:
+        base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+        api-key: your-qianwen-key # 请填入您的通义千问 API Key
+        model: qwen-turbo
+        temperature: 0.7
+      openai:
+        base-url: https://api.openai.com/v1
+        api-key: your-openai-key
+        model: gpt-3.5-turbo
+        temperature: 0.7
 
 server:
   port: 8080
