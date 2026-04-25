@@ -7,6 +7,8 @@ import com.example.javaai.service.AnalysisResultService;
 import com.example.javaai.service.ChatService;
 import com.example.javaai.service.FileExtractorService;
 import org.springframework.beans.factory.annotation.Value;
+import com.example.javaai.model.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
@@ -55,13 +57,14 @@ public class FileController {
     /**
      * 列出指定目录下的文件和子目录
      */
+    @Operation(summary = "列出目录内容", description = "获取指定目录下的所有文件和文件夹")
     @GetMapping
-    public Map<String, Object> listFiles(@RequestParam(value = "dir", defaultValue = "") String dir) throws IOException {
+    public ApiResponse<Map<String, Object>> listFiles(@RequestParam(value = "dir", defaultValue = "") String dir) throws IOException {
         Path dirPath = safePath(dir);
         File folder = dirPath.toFile();
 
         if (!folder.exists() || !folder.isDirectory()) {
-            return Map.of("error", "Directory not found", "path", dir);
+            return ApiResponse.error(404, "Directory not found: " + dir);
         }
 
         File[] children = folder.listFiles();
@@ -107,22 +110,23 @@ public class FileController {
             return ((String) a.get("name")).compareToIgnoreCase((String) b.get("name"));
         });
 
-        return Map.of(
+        return ApiResponse.success(Map.of(
                 "currentDir", dir,
                 "items", items
-        );
+        ));
     }
 
     /**
      * 读取文件内容
      */
+    @Operation(summary = "读取文件内容", description = "获取文件的文本内容或图片的 Base64 编码")
     @GetMapping("/content")
-    public Map<String, Object> getFileContent(@RequestParam("path") String filePath) throws IOException {
+    public ApiResponse<Map<String, Object>> getFileContent(@RequestParam("path") String filePath) throws IOException {
         Path target = safePath(filePath);
         File file = target.toFile();
 
         if (!file.exists() || !file.isFile()) {
-            return Map.of("error", "File not found");
+            return ApiResponse.error(404, "File not found: " + filePath);
         }
 
         String name = file.getName().toLowerCase();
@@ -138,14 +142,14 @@ public class FileController {
             String mime = name.endsWith(".png") ? "image/png" : "image/jpeg";
             result.put("type", "image");
             result.put("content", "data:" + mime + ";base64," + base64);
-            return result;
+            return ApiResponse.success(result);
         }
 
         // 纯二进制文件
         if (name.endsWith(".pt") || name.endsWith(".pth")) {
             result.put("type", "binary");
             result.put("content", "[二进制文件，大小: " + formatSize(file.length()) + "]");
-            return result;
+            return ApiResponse.success(result);
         }
 
         // 使用提取器服务
@@ -173,12 +177,13 @@ public class FileController {
             result.put("content", extraction.getErrorMessage());
         }
 
-        return result;
+        return ApiResponse.success(result);
     }
 
     /**
      * AI 分析文件内容（流式返回）
      */
+    @Operation(summary = "流式 AI 分析", description = "分析单个文件的内容并流式返回结果")
     @GetMapping(value = "/analyze", produces = MediaType.TEXT_EVENT_STREAM_VALUE + ";charset=UTF-8")
     public Flux<String> analyzeFile(
             @RequestParam("path") String filePath,

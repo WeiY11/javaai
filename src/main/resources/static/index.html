@@ -86,6 +86,10 @@
                             </div>
                         </div>
                         <div class="topbar-right">
+                            <button class="btn-analyze-all" id="btnAnalyzeAll" title="AI 分析当前目录下所有文件">
+                                <span class="material-icons-round">auto_awesome</span>
+                                <span>分析全部</span>
+                            </button>
                             <div class="search-box">
                                 <span class="material-icons-round">search</span>
                                 <input type="text" id="searchInput" placeholder="搜索文件..." autocomplete="off">
@@ -183,8 +187,44 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ===== 批量分析模态框 ===== -->
+            <div class="modal-overlay hidden" id="batchModal">
+                <div class="modal-container">
+                    <div class="modal-header">
+                        <div class="modal-title-group">
+                            <span class="material-icons-round modal-icon">auto_awesome</span>
+                            <h2 id="batchModalTitle">目录文件批量分析</h2>
+                        </div>
+                        <button class="btn-icon btn-close-modal" id="btnCloseBatchModal">
+                            <span class="material-icons-round">close</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- 进度区域 -->
+                        <div class="batch-progress-section" id="batchProgressSection">
+                            <div class="progress-info">
+                                <span id="batchProgressText">准备中...</span>
+                                <span id="batchProgressCount">0/0</span>
+                            </div>
+                            <div class="progress-bar-track">
+                                <div class="progress-bar-fill" id="batchProgressBar"></div>
+                            </div>
+                            <div class="progress-current" id="batchCurrentFile">等待开始...</div>
+                        </div>
+                        <!-- 结果列表 -->
+                        <div class="batch-results-section hidden" id="batchResultsSection">
+                            <div class="batch-results-list" id="batchResultsList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
+
+    <!-- Toast 通知容器 -->
+    <div id="toastContainer" class="toast-container"></div>
+
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>

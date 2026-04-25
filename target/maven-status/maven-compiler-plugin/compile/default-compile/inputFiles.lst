@@ -1,9 +1,12 @@
 D:\javaai\src\main\java\com\example\javaai\config\AiConfig.java
+D:\javaai\src\main\java\com\example\javaai\config\AiDataTools.java
 D:\javaai\src\main\java\com\example\javaai\config\AiProperties.java
 D:\javaai\src\main\java\com\example\javaai\config\AnalysisProperties.java
+D:\javaai\src\main\java\com\example\javaai\config\AsyncConfig.java
 D:\javaai\src\main\java\com\example\javaai\controller\AnalysisController.java
 D:\javaai\src\main\java\com\example\javaai\controller\ChatController.java
 D:\javaai\src\main\java\com\example\javaai\controller\FileController.java
+D:\javaai\src\main\java\com\example\javaai\controller\GlobalExceptionHandler.java
 D:\javaai\src\main\java\com\example\javaai\extractor\ExcelFileExtractor.java
 D:\javaai\src\main\java\com\example\javaai\extractor\ExtractionResult.java
 D:\javaai\src\main\java\com\example\javaai\extractor\FileContentExtractor.java
@@ -12,9 +15,11 @@ D:\javaai\src\main\java\com\example\javaai\extractor\TextFileExtractor.java
 D:\javaai\src\main\java\com\example\javaai\extractor\WordFileExtractor.java
 D:\javaai\src\main\java\com\example\javaai\JavaaiApplication.java
 D:\javaai\src\main\java\com\example\javaai\model\AnalysisResult.java
+D:\javaai\src\main\java\com\example\javaai\model\ApiResponse.java
 D:\javaai\src\main\java\com\example\javaai\model\BatchAnalysisItemResult.java
 D:\javaai\src\main\java\com\example\javaai\model\BatchAnalysisRequest.java
 D:\javaai\src\main\java\com\example\javaai\model\BatchProgress.java
+D:\javaai\src\main\java\com\example\javaai\repository\AnalysisResultRepository.java
 D:\javaai\src\main\java\com\example\javaai\service\AnalysisResultService.java
 D:\javaai\src\main\java\com\example\javaai\service\BatchProgressService.java
 D:\javaai\src\main\java\com\example\javaai\service\ChatService.java

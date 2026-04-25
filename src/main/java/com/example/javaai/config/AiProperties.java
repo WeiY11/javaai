@@ -1,11 +1,9 @@
 package com.example.javaai.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
 
 import java.util.Map;
 
-@Configuration
 @ConfigurationProperties(prefix = "custom.ai")
 public class AiProperties {
 

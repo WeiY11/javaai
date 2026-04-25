@@ -1,4 +1,24 @@
 // ===== 全局 =====
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const iconMap = { success: 'check_circle', error: 'error', info: 'info' };
+    toast.innerHTML = `
+        <span class="material-icons-round toast-icon">${iconMap[type]}</span>
+        <div class="toast-message">${message}</div>
+    `;
+    container.appendChild(toast);
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => toast.classList.add('show'));
+    });
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 const chatMessages = document.getElementById('chatMessages');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
@@ -104,7 +124,9 @@ async function loadFiles(dir) {
     tbody.innerHTML = '';
     try {
         const res = await fetch(`/api/files?dir=${encodeURIComponent(dir)}`);
-        const data = await res.json();
+        const json = await res.json();
+        if (json.code !== 200) { showToast(json.message, 'error'); throw new Error(json.message); }
+        const data = json.data;
         allFiles = data.items || [];
         updateStats();
         renderFileTable();
@@ -215,8 +237,9 @@ async function previewFile(path) {
     document.querySelectorAll('.file-table tbody tr').forEach(tr => tr.classList.toggle('active-row', tr.dataset.path === path));
     try {
         const res = await fetch(`/api/files/content?path=${encodeURIComponent(path)}`);
-        const data = await res.json();
-        if (data.error) { content.innerHTML = `<div style="color:#f87171;">${data.error}</div>`; return; }
+        const json = await res.json();
+        if (json.code !== 200) { content.innerHTML = `<div style="color:#f87171;">${json.message}</div>`; showToast(json.message, 'error'); return; }
+        const data = json.data;
         if (data.type === 'image') content.innerHTML = `<img src="${data.content}" alt="${data.name}">`;
         else if (data.type === 'json') { try { content.innerHTML = `<pre><code class="hljs language-json">${hljs.highlight(JSON.stringify(JSON.parse(data.content),null,2),{language:'json'}).value}</code></pre>`; } catch { content.innerHTML = `<pre>${escHtml(data.content)}</pre>`; } }
         else if (data.type === 'csv') content.innerHTML = csvTable(data.content);
@@ -256,6 +279,179 @@ document.getElementById('btnAnalyze').addEventListener('click', async () => {
         ac.innerHTML = DOMPurify.sanitize(marked.parse(full));
     } catch (e) { ac.innerHTML = `<em>分析出错：${e.message}</em>`; }
     finally { btn.disabled = false; btn.querySelector('span:last-child').textContent = 'AI 分析'; }
+});
+
+// ========== PART 4: Batch Dir Analysis ==========
+let batchTaskId = null;
+let batchPollTimer = null;
+
+document.getElementById('btnAnalyzeAll').addEventListener('click', async () => {
+    const btn = document.getElementById('btnAnalyzeAll');
+    const modal = document.getElementById('batchModal');
+    const progressSection = document.getElementById('batchProgressSection');
+    const resultsSection = document.getElementById('batchResultsSection');
+    const progressText = document.getElementById('batchProgressText');
+    const progressCount = document.getElementById('batchProgressCount');
+    const progressBar = document.getElementById('batchProgressBar');
+    const currentFile = document.getElementById('batchCurrentFile');
+    const resultsList = document.getElementById('batchResultsList');
+    const title = document.getElementById('batchModalTitle');
+
+    // 重置 UI
+    progressSection.classList.remove('hidden');
+    resultsSection.classList.add('hidden');
+    progressText.textContent = '正在扫描文件...';
+    progressCount.textContent = '0/0';
+    progressBar.style.width = '0%';
+    currentFile.textContent = '等待开始...';
+    resultsList.innerHTML = '';
+    title.textContent = currentDir ? `分析目录: ${currentDir}` : '分析根目录所有文件';
+
+    // 显示模态框
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => modal.classList.add('show'));
+    btn.disabled = true;
+    btn.querySelector('span:last-child').textContent = '分析中...';
+
+    try {
+        // 发起批量分析请求
+        const res = await fetch('/api/analysis/batch-dir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dir: currentDir, provider: modelSelect.value })
+        });
+        const json = await res.json();
+
+        if (json.code !== 200) {
+            progressText.textContent = '⚠️ ' + json.message;
+            currentFile.textContent = '';
+            btn.disabled = false;
+            btn.querySelector('span:last-child').textContent = '分析全部';
+            showToast(json.message, 'error');
+            return;
+        }
+
+        const data = json.data;
+
+        batchTaskId = data.taskId;
+        progressText.textContent = `正在分析 ${data.fileCount} 个文件...`;
+        progressCount.textContent = `0/${data.fileCount}`;
+
+        // 轮询进度
+        batchPollTimer = setInterval(async () => {
+            try {
+                const pRes = await fetch(`/api/analysis/batch/progress?taskId=${encodeURIComponent(batchTaskId)}`);
+                const pJson = await pRes.json();
+                if (pJson.code !== 200) return;
+                const progress = pJson.data;
+
+                const pct = progress.totalCount > 0 ? Math.round(progress.completedCount / progress.totalCount * 100) : 0;
+                progressBar.style.width = pct + '%';
+                progressCount.textContent = `${progress.completedCount}/${progress.totalCount}`;
+                currentFile.textContent = progress.currentFile ? `正在分析: ${progress.currentFile}` : '处理中...';
+
+                if (progress.status === 'COMPLETED' || progress.status === 'FAILED') {
+                    clearInterval(batchPollTimer);
+                    batchPollTimer = null;
+                    progressBar.style.width = '100%';
+
+                    if (progress.status === 'COMPLETED') {
+                        progressText.textContent = '✅ 分析完成！';
+                        currentFile.textContent = `耗时: ${formatDuration(progress.startTime, progress.endTime)}`;
+                    } else {
+                        progressText.textContent = '❌ 分析失败';
+                        currentFile.textContent = progress.errorMessage || '';
+                    }
+
+                    // 获取结果
+                    await loadBatchResults(batchTaskId);
+                    btn.disabled = false;
+                    btn.querySelector('span:last-child').textContent = '分析全部';
+                }
+            } catch (e) {
+                console.error('轮询进度失败', e);
+            }
+        }, 1500);
+
+    } catch (e) {
+        progressText.textContent = '❌ 请求失败: ' + e.message;
+        currentFile.textContent = '';
+        btn.disabled = false;
+        btn.querySelector('span:last-child').textContent = '分析全部';
+    }
+});
+
+async function loadBatchResults(taskId) {
+    const resultsSection = document.getElementById('batchResultsSection');
+    const resultsList = document.getElementById('batchResultsList');
+
+    try {
+        const res = await fetch(`/api/analysis/batch/result?taskId=${encodeURIComponent(taskId)}`);
+        const json = await res.json();
+        if (json.code !== 200) { showToast(json.message, 'error'); return; }
+        const data = json.data;
+
+        if (!data.results || data.results.length === 0) {
+            resultsList.innerHTML = '<div class="empty-state"><div class="empty-text">暂无结果</div></div>';
+            resultsSection.classList.remove('hidden');
+            return;
+        }
+
+        resultsList.innerHTML = data.results.map((item, idx) => `
+            <div class="batch-result-item ${item.success ? 'success' : 'failed'}">
+                <div class="batch-result-header" onclick="toggleBatchResult(${idx})">
+                    <div class="batch-result-left">
+                        <span class="material-icons-round batch-status-icon">${item.success ? 'check_circle' : 'error'}</span>
+                        <span class="batch-result-filename">${escHtml(item.fileName || item.filePath)}</span>
+                    </div>
+                    <span class="material-icons-round batch-expand-icon" id="batchExpand${idx}">expand_more</span>
+                </div>
+                <div class="batch-result-body hidden" id="batchBody${idx}">
+                    <div class="markdown-body">${item.success
+                        ? DOMPurify.sanitize(marked.parse(item.content || ''))
+                        : `<div style="color:#f87171;">${escHtml(item.error || '未知错误')}</div>`
+                    }</div>
+                </div>
+            </div>
+        `).join('');
+
+        resultsSection.classList.remove('hidden');
+    } catch (e) {
+        resultsList.innerHTML = `<div style="color:#f87171;padding:16px;">获取结果失败: ${e.message}</div>`;
+        resultsSection.classList.remove('hidden');
+    }
+}
+
+function toggleBatchResult(idx) {
+    const body = document.getElementById(`batchBody${idx}`);
+    const icon = document.getElementById(`batchExpand${idx}`);
+    const isHidden = body.classList.contains('hidden');
+    body.classList.toggle('hidden');
+    icon.textContent = isHidden ? 'expand_less' : 'expand_more';
+}
+
+function formatDuration(startStr, endStr) {
+    if (!startStr || !endStr) return '-';
+    const start = new Date(startStr.replace(' ', 'T'));
+    const end = new Date(endStr.replace(' ', 'T'));
+    const diff = Math.round((end - start) / 1000);
+    if (diff < 60) return diff + '秒';
+    return Math.floor(diff / 60) + '分' + (diff % 60) + '秒';
+}
+
+// 关闭模态框
+document.getElementById('btnCloseBatchModal').addEventListener('click', () => {
+    const modal = document.getElementById('batchModal');
+    modal.classList.remove('show');
+    setTimeout(() => modal.classList.add('hidden'), 300);
+    if (batchPollTimer) {
+        clearInterval(batchPollTimer);
+        batchPollTimer = null;
+    }
+    // 恢复按钮状态
+    const btn = document.getElementById('btnAnalyzeAll');
+    btn.disabled = false;
+    btn.querySelector('span:last-child').textContent = '分析全部';
 });
 
 window.onload = () => userInput.focus();

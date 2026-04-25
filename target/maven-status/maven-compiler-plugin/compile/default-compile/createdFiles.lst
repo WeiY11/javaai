@@ -18,7 +18,6 @@ com\example\javaai\config\AiProperties$ProviderConfig.class
 com\example\javaai\controller\FileController.class
 com\example\javaai\model\BatchProgress.class
 com\example\javaai\extractor\ExcelFileExtractor$1.class
-com\example\javaai\service\AnalysisResultService$1.class
 com\example\javaai\model\AnalysisResult.class
 com\example\javaai\config\AiConfig.class
 com\example\javaai\service\BatchProgressService.class

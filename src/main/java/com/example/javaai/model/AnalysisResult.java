@@ -2,18 +2,37 @@ package com.example.javaai.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
+import jakarta.persistence.Table;
+
 import java.time.LocalDateTime;
 
+@Entity
+@Table(name = "analysis_result")
 public class AnalysisResult {
 
+    @Id
     private String id;
+    
+    @Column(nullable = false)
     private String filePath;
+    
+    @Column(nullable = false)
     private String fileName;
+    
     private String provider;
     private String sessionId;
+    
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime analyzedAt;
+    
+    @Lob
+    @Column(columnDefinition = "TEXT")
     private String content;
+    
     private long fileSize;
     private String fileCategory;
 
