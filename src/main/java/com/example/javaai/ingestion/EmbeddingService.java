@@ -12,12 +12,19 @@ import java.util.Map;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EmbeddingService {
 
     private final VectorStore vectorStore;
 
+    public EmbeddingService(@org.springframework.beans.factory.annotation.Autowired(required = false) VectorStore vectorStore) {
+        this.vectorStore = vectorStore;
+    }
+
     public List<String> embedAndStore(List<String> chunks, Long knowledgeBaseId, Long documentId) {
+        if (vectorStore == null) {
+            log.warn("VectorStore not available, skipping embedding");
+            return List.of();
+        }
         List<Document> documents = new java.util.ArrayList<>();
         List<String> vectorIds = new java.util.ArrayList<>();
 

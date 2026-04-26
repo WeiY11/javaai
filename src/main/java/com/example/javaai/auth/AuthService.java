@@ -107,7 +107,7 @@ public class AuthService {
         RefreshToken rt = new RefreshToken();
         rt.setUserId(user.getId());
         rt.setTokenHash(hashToken(refreshToken));
-        rt.setExpiresAt(LocalDateTime.now().plusMillis(jwtConfig.getRefreshTokenExpiration()));
+        rt.setExpiresAt(LocalDateTime.now().plusSeconds(jwtConfig.getRefreshTokenExpiration() / 1000));
         rt.setRevoked(false);
         refreshTokenMapper.insert(rt);
 

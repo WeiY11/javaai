@@ -2,16 +2,16 @@ package com.example.javaai.ingestion;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.javaai.extractor.ExtractionResult;
-import com.example.javaai.extractor.FileContentExtractor;
 import com.example.javaai.mapper.DocumentChunkMapper;
 import com.example.javaai.mapper.DocumentMapper;
 import com.example.javaai.model.entity.Document;
 import com.example.javaai.model.entity.DocumentChunk;
 import com.example.javaai.model.entity.KnowledgeBase;
 import com.example.javaai.mapper.KnowledgeBaseMapper;
+import com.example.javaai.service.FileExtractorService;
 import com.example.javaai.storage.MinioStorageService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,18 +21,26 @@ import java.util.List;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EtlPipeline {
 
-    private final DocumentMapper documentMapper;
-    private final DocumentChunkMapper documentChunkMapper;
-    private final KnowledgeBaseMapper knowledgeBaseMapper;
-    private final MinioStorageService minioStorageService;
-    private final FileContentExtractor fileContentExtractor;
-    private final TextCleaner textCleaner;
-    private final DocumentChunker documentChunker;
-    private final EmbeddingService embeddingService;
-    private final ElasticsearchIndexService elasticsearchIndexService;
+    @Autowired
+    private DocumentMapper documentMapper;
+    @Autowired
+    private DocumentChunkMapper documentChunkMapper;
+    @Autowired
+    private KnowledgeBaseMapper knowledgeBaseMapper;
+    @Autowired(required = false)
+    private MinioStorageService minioStorageService;
+    @Autowired
+    private FileExtractorService fileExtractorService;
+    @Autowired
+    private TextCleaner textCleaner;
+    @Autowired
+    private DocumentChunker documentChunker;
+    @Autowired
+    private EmbeddingService embeddingService;
+    @Autowired
+    private ElasticsearchIndexService elasticsearchIndexService;
 
     @Transactional
     public void processDocument(Long documentId) {
@@ -81,9 +89,16 @@ public class EtlPipeline {
     }
 
     private String extract(Document doc) {
-        try (InputStream is = minioStorageService.downloadFile(doc.getStoragePath())) {
-            ExtractionResult result = fileContentExtractor.extractFile(
-                    Path.of(doc.getFileName()), Integer.MAX_VALUE);
+        if (minioStorageService == null) {
+            throw new RuntimeException("MinIO storage not available");
+        }
+        try {
+            java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("etl_", "_" + doc.getFileName());
+            try (InputStream is = minioStorageService.downloadFile(doc.getStoragePath())) {
+                java.nio.file.Files.copy(is, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            ExtractionResult result = fileExtractorService.extractFile(tempFile, Integer.MAX_VALUE);
+            java.nio.file.Files.deleteIfExists(tempFile);
             if (!result.isSuccess()) {
                 throw new RuntimeException("Extraction failed: " + result.getErrorMessage());
             }
@@ -120,7 +135,9 @@ public class EtlPipeline {
         );
         embeddingService.deleteByDocumentId(documentId);
         elasticsearchIndexService.deleteByDocumentId(documentId);
-        minioStorageService.deleteFile(doc.getStoragePath());
+        if (minioStorageService != null) {
+            minioStorageService.deleteFile(doc.getStoragePath());
+        }
         documentMapper.deleteById(documentId);
         log.info("Deleted document {} and all associated data", documentId);
     }

@@ -64,4 +64,8 @@ public class TokenProvider {
     public String getSystemRoleFromToken(String token) {
         return parseToken(token).get("systemRole", String.class);
     }
+
+    public String getUsernameFromToken(String token) {
+        return parseToken(token).get("username", String.class);
+    }
 }

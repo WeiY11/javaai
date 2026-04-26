@@ -15,15 +15,28 @@ import java.util.List;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class MinioStorageService {
 
-    private final MinioClient minioClient;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private MinioClient minioClient;
+
     private final MinioConfig minioConfig;
+
+    public MinioStorageService(MinioConfig minioConfig) {
+        this.minioConfig = minioConfig;
+    }
 
     @PostConstruct
     public void init() {
-        ensureBucketExists();
+        if (minioClient == null || minioConfig == null) {
+            log.warn("MinIO not configured, object storage disabled");
+            return;
+        }
+        try {
+            ensureBucketExists();
+        } catch (Exception e) {
+            log.warn("MinIO not available, running without object storage: {}", e.getMessage());
+        }
     }
 
     private void ensureBucketExists() {

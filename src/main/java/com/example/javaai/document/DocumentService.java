@@ -8,8 +8,8 @@ import com.example.javaai.mapper.DocumentMapper;
 import com.example.javaai.model.dto.ApiResponse;
 import com.example.javaai.model.entity.Document;
 import com.example.javaai.storage.MinioStorageService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,12 +20,14 @@ import java.util.Set;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class DocumentService {
 
-    private final DocumentMapper documentMapper;
-    private final MinioStorageService minioStorageService;
-    private final EtlPipeline etlPipeline;
+    @Autowired
+    private DocumentMapper documentMapper;
+    @Autowired(required = false)
+    private MinioStorageService minioStorageService;
+    @Autowired
+    private EtlPipeline etlPipeline;
 
     private static final Set<String> ALLOWED_FORMATS = Set.of(
             "pdf", "xlsx", "xls", "docx", "doc", "csv", "json", "md", "txt",
@@ -34,6 +36,9 @@ public class DocumentService {
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
 
     public Document upload(MultipartFile file, Long knowledgeBaseId) {
+        if (minioStorageService == null) {
+            throw new RuntimeException("MinIO storage not available");
+        }
         String originalName = file.getOriginalFilename();
         String format = getFormat(originalName);
 

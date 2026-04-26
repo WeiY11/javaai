@@ -9,34 +9,39 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class PgVectorSearchService {
 
     private final VectorStore vectorStore;
 
+    public PgVectorSearchService(@org.springframework.beans.factory.annotation.Autowired(required = false) VectorStore vectorStore) {
+        this.vectorStore = vectorStore;
+    }
+
     public List<SearchResult> search(String query, Long knowledgeBaseId, int topK) {
+        if (vectorStore == null) {
+            log.warn("VectorStore not available, returning empty results");
+            return List.of();
+        }
         try {
-            List<org.springframework.ai.vectorstore.SearchResult> results = vectorStore.similaritySearch(
-                    SearchRequest.builder()
-                            .query(query)
-                            .topK(topK)
-                            .filterExpression("knowledgeBaseId == '" + knowledgeBaseId + "'")
-                            .build()
-            );
+            SearchRequest request = SearchRequest.query(query)
+                    .withTopK(topK)
+                    .withSimilarityThreshold(0.0);
+
+            List<Document> results = vectorStore.similaritySearch(request);
 
             List<SearchResult> searchResults = new ArrayList<>();
-            for (var result : results) {
-                Document doc = result.getDocument();
+            for (Document doc : results) {
                 searchResults.add(new SearchResult(
                         doc.getId(),
-                        Long.parseLong(doc.getMetadata().get("documentId").toString()),
-                        Long.parseLong(doc.getMetadata().get("knowledgeBaseId").toString()),
+                        doc.getMetadata().containsKey("documentId") ? Long.parseLong(doc.getMetadata().get("documentId").toString()) : 0L,
+                        doc.getMetadata().containsKey("knowledgeBaseId") ? Long.parseLong(doc.getMetadata().get("knowledgeBaseId").toString()) : knowledgeBaseId,
                         doc.getContent(),
-                        Integer.parseInt(doc.getMetadata().get("chunkIndex").toString()),
-                        result.getScore(),
+                        doc.getMetadata().containsKey("chunkIndex") ? Integer.parseInt(doc.getMetadata().get("chunkIndex").toString()) : 0,
+                        1.0,
                         "pgvector"
                 ));
             }

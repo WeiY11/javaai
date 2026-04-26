@@ -5,9 +5,9 @@ import com.example.javaai.mapper.KnowledgeBaseMapper;
 import com.example.javaai.model.entity.KnowledgeBase;
 import com.example.javaai.retrieval.HybridSearchService;
 import com.example.javaai.retrieval.SearchResult;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -18,15 +18,18 @@ import java.util.Map;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class RagPipeline {
 
-    private final HybridSearchService hybridSearchService;
-    private final KnowledgeBaseMapper knowledgeBaseMapper;
-    private final PromptTemplateManager promptTemplateManager;
-    private final ChatClient.Builder chatClientBuilder;
+    @Autowired
+    private HybridSearchService hybridSearchService;
+    @Autowired
+    private KnowledgeBaseMapper knowledgeBaseMapper;
+    @Autowired
+    private PromptTemplateManager promptTemplateManager;
+    @Autowired
+    private Map<String, ChatClient> chatClients;
 
-    public RagResponse query(String userQuery, Long knowledgeBaseId, ChatClient chatClient) {
+    public RagResponse query(String userQuery, Long knowledgeBaseId) {
         KnowledgeBase kb = knowledgeBaseMapper.selectById(knowledgeBaseId);
         if (kb == null) {
             throw new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId);
@@ -66,6 +69,12 @@ public class RagPipeline {
         vars.put("query", userQuery);
         String prompt = promptTemplateManager.render("evidence-sufficient-prompt", vars);
 
+        ChatClient chatClient = resolveChatClient();
+        if (chatClient == null) {
+            response.setAnswer("AI model not available. Please configure an AI provider.");
+            return response;
+        }
+
         String answer = chatClient.prompt()
                 .user(prompt)
                 .call()
@@ -83,6 +92,13 @@ public class RagPipeline {
         response.setCitations(citations);
 
         return response;
+    }
+
+    private ChatClient resolveChatClient() {
+        if (chatClients != null && !chatClients.isEmpty()) {
+            return chatClients.values().iterator().next();
+        }
+        return null;
     }
 
     private String buildContext(List<SearchResult> results) {

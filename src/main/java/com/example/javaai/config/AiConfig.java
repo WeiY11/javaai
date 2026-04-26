@@ -35,17 +35,22 @@ public class AiConfig {
                 String providerName = entry.getKey();
                 AiProperties.ProviderConfig config = entry.getValue();
 
-                OpenAiApi openAiApi = new OpenAiApi(config.getBaseUrl(), config.getApiKey());
+                try {
+                    OpenAiApi openAiApi = new OpenAiApi(config.getBaseUrl(), config.getApiKey());
 
-                OpenAiChatOptions options = OpenAiChatOptions.builder()
-                        .model(config.getModel())
-                        .temperature(config.getTemperature() != null ? config.getTemperature().floatValue() : 0.7f)
-                        .build();
+                    OpenAiChatOptions options = OpenAiChatOptions.builder()
+                            .withModel(config.getModel())
+                            .withTemperature(config.getTemperature() != null ? config.getTemperature().floatValue() : 0.7f)
+                            .build();
 
-                OpenAiChatModel chatModel = new OpenAiChatModel(openAiApi, options);
+                    OpenAiChatModel chatModel = new OpenAiChatModel(openAiApi, options);
 
-                ChatClient client = ChatClient.builder(chatModel).build();
-                clients.put(providerName, client);
+                    ChatClient client = ChatClient.builder(chatModel).build();
+                    clients.put(providerName, client);
+                } catch (Exception e) {
+                    org.slf4j.LoggerFactory.getLogger(AiConfig.class)
+                            .warn("Failed to create ChatClient for provider '{}': {}", providerName, e.getMessage());
+                }
             }
         }
         return clients;

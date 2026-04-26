@@ -17,6 +17,7 @@ public class MinioConfig {
     private String bucket;
 
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "minio", name = "enabled", havingValue = "true")
     public MinioClient minioClient() {
         return MinioClient.builder()
                 .endpoint(endpoint)

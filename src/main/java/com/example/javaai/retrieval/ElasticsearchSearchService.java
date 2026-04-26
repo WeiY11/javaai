@@ -14,13 +14,21 @@ import java.util.Map;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ElasticsearchSearchService {
 
     private final ElasticsearchClient elasticsearchClient;
+
+    public ElasticsearchSearchService(@org.springframework.beans.factory.annotation.Autowired(required = false) ElasticsearchClient elasticsearchClient) {
+        this.elasticsearchClient = elasticsearchClient;
+    }
+
     private static final String INDEX_NAME = "document_chunk";
 
     public List<SearchResult> search(String query, Long knowledgeBaseId, int topK) {
+        if (elasticsearchClient == null) {
+            log.warn("ElasticsearchClient not available, returning empty results");
+            return List.of();
+        }
         try {
             SearchResponse<Map> response = elasticsearchClient.search(s -> s
                             .index(INDEX_NAME)
