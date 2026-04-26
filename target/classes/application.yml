@@ -2,19 +2,27 @@ spring:
   application:
     name: javaai
   datasource:
-    url: jdbc:h2:file:./data/javaai
-    driverClassName: org.h2.Driver
-    username: sa
-    password: password
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:javaai}
+    driver-class-name: org.postgresql.Driver
+    username: ${POSTGRES_USER:javaai}
+    password: ${POSTGRES_PASSWORD:javaai123}
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
-    show-sql: true
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  elasticsearch:
+    uris: ${ES_URIS:http://localhost:9200}
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
 
 springdoc:
   api-docs:
@@ -23,36 +31,42 @@ springdoc:
     path: /swagger-ui.html
     operationsSorter: method
 
-# 自定义多模型配置
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:javaai-documents}
+
+jwt:
+  secret: ${JWT_SECRET:myDefaultJwtSecretKeyForDevOnlyPleaseReplaceInProduction2026}
+  access-token-expiration: 3600000
+  refresh-token-expiration: 604800000
+
 custom:
   ai:
     providers:
       deepseek:
         base-url: https://api.deepseek.com
-        api-key: sk-75262ec5d9544471890532d12d6b2d32
+        api-key: ${DEEPSEEK_API_KEY:your-deepseek-key}
         model: deepseek-chat
         temperature: 0.7
       zhipu:
         base-url: https://open.bigmodel.cn/api/paas/v4/
-        api-key: your-zhipu-key # 请填入您的智谱 API Key
+        api-key: ${ZHIPU_API_KEY:your-zhipu-key}
         model: glm-4
         temperature: 0.7
       qianwen:
         base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-        api-key: your-qianwen-key # 请填入您的通义千问 API Key
+        api-key: ${QIANWEN_API_KEY:your-qianwen-key}
         model: qwen-turbo
         temperature: 0.7
       openai:
         base-url: https://api.openai.com/v1
-        api-key: your-openai-key
+        api-key: ${OPENAI_API_KEY:your-openai-key}
         model: gpt-3.5-turbo
         temperature: 0.7
-
-    # 实验数据管理目录
   data:
-    base-dir: D:/paper2_MADOP
-
-  # 文件分析配置
+    base-dir: ${DATA_BASE_DIR:/data}
   analysis:
     max-content-size: 512000
     max-prompt-size: 100000
@@ -63,3 +77,8 @@ custom:
 
 server:
   port: 8080
+
+logging:
+  level:
+    com.example.javaai: INFO
+    org.springframework.ai: DEBUG

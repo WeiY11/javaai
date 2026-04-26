@@ -4,7 +4,6 @@ import com.example.javaai.extractor.ExtractionResult;
 import com.example.javaai.model.AnalysisResult;
 import com.example.javaai.service.AnalysisResultService;
 import com.example.javaai.service.FileExtractorService;
-import com.example.javaai.config.AnalysisProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,7 +45,6 @@ public class AiDataTools {
         return target;
     }
 
-    // --- Tool 1: List Directory ---
     public record ListDirectoryRequest(
         @JsonProperty(required = true) @JsonPropertyDescription("相对于数据根目录的相对路径。根目录留空字符串即可。") String dirPath
     ) {}
@@ -63,7 +61,6 @@ public class AiDataTools {
                 if (!folder.exists() || !folder.isDirectory()) {
                     return new ListDirectoryResponse(null, "目录不存在: " + request.dirPath());
                 }
-                
                 File[] children = folder.listFiles();
                 List<String> items = new ArrayList<>();
                 if (children != null) {
@@ -79,9 +76,8 @@ public class AiDataTools {
         };
     }
 
-    // --- Tool 2: Read File Content ---
     public record ReadFileRequest(
-        @JsonProperty(required = true) @JsonPropertyDescription("要读取的文件的相对路径，例如 'test.pdf' 或是 'folder/data.csv'") String filePath
+        @JsonProperty(required = true) @JsonPropertyDescription("要读取的文件的相对路径") String filePath
     ) {}
 
     public record ReadFileResponse(String content, String error) {}
@@ -96,12 +92,10 @@ public class AiDataTools {
                 if (!file.exists() || !file.isFile()) {
                     return new ReadFileResponse(null, "文件不存在: " + request.filePath());
                 }
-
                 ExtractionResult extraction = fileExtractorService.extractFile(target, analysisProperties.getMaxPromptSize());
                 if (!extraction.isSuccess()) {
                     return new ReadFileResponse(null, "提取失败: " + extraction.getErrorMessage());
                 }
-                
                 String content = extraction.getContent();
                 if (content.length() > 50000) {
                     content = content.substring(0, 50000) + "\n...[内容过长已截断]";
@@ -113,7 +107,6 @@ public class AiDataTools {
         };
     }
 
-    // --- Tool 3: Query Analysis History ---
     public record QueryAnalysisRequest(
         @JsonProperty(required = true) @JsonPropertyDescription("要查询历史分析结果的文件相对路径。") String filePath
     ) {}
@@ -121,7 +114,7 @@ public class AiDataTools {
     public record QueryAnalysisResponse(String analysisResult, String error) {}
 
     @Bean
-    @Description("查询某文件以前是否被系统分析过，返回系统自动生成的分析报告。如果你需要了解某个文件的总结和诊断，可以优先调用此工具。")
+    @Description("查询某文件以前是否被系统分析过，返回系统自动生成的分析报告。")
     public Function<QueryAnalysisRequest, QueryAnalysisResponse> queryAnalysisHistory() {
         return request -> {
             try {
@@ -129,7 +122,6 @@ public class AiDataTools {
                 if (results == null || results.isEmpty()) {
                     return new QueryAnalysisResponse("暂无该文件的分析记录", null);
                 }
-                // 返回最新的一条分析记录
                 return new QueryAnalysisResponse(results.get(0).getContent(), null);
             } catch (Exception e) {
                 return new QueryAnalysisResponse(null, "查询历史记录失败: " + e.getMessage());
