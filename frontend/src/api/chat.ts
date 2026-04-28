@@ -1,4 +1,4 @@
-import type { Conversation, ChatMessage } from '../types/chat.types'
+import type { Conversation, ChatMessage, Citation } from '../types/chat.types'
 import { get, del } from '../utils/request'
 import request from '../utils/request'
 
@@ -22,4 +22,83 @@ export async function addMessage(conversationId: number, role: string, content: 
 
 export async function deleteConversation(conversationId: number): Promise<void> {
   return del(`/conversations/${conversationId}`)
+}
+
+export interface StreamCallbacks {
+  onToken: (text: string) => void
+  onCitations: (citations: Citation[]) => void
+  onDone: (messageId: number) => void
+  onError: (error: string) => void
+}
+
+export async function streamMessage(
+  conversationId: number,
+  content: string,
+  callbacks: StreamCallbacks
+): Promise<void> {
+  const token = localStorage.getItem('accessToken')
+  const response = await fetch(`/api/v1/conversations/${conversationId}/messages/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : ''
+    },
+    body: JSON.stringify({ content })
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    callbacks.onError(`HTTP ${response.status}: ${errorText}`)
+    return
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    callbacks.onError('Stream not supported')
+    return
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+
+      let data = trimmed
+      if (trimmed.startsWith('data:')) {
+        data = trimmed.substring(5).trim()
+      }
+
+      if (!data) continue
+
+      try {
+        const event = JSON.parse(data)
+        switch (event.type) {
+          case 'token':
+            callbacks.onToken(event.text || '')
+            break
+          case 'citations':
+            callbacks.onCitations(event.citations || [])
+            break
+          case 'done':
+            callbacks.onDone(event.messageId)
+            break
+          case 'error':
+            callbacks.onError(event.message || 'Unknown error')
+            break
+        }
+      } catch {
+        // Skip non-JSON data lines
+      }
+    }
+  }
 }

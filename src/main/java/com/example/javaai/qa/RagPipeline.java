@@ -1,7 +1,13 @@
 package com.example.javaai.qa;
 
 import com.example.javaai.config.PromptTemplateManager;
+import com.example.javaai.identity.GroupContext;
+import com.example.javaai.mapper.DocumentMapper;
+import com.example.javaai.mapper.KbMemberMapper;
 import com.example.javaai.mapper.KnowledgeBaseMapper;
+import com.example.javaai.model.dto.StreamEvent;
+import com.example.javaai.model.entity.Document;
+import com.example.javaai.model.entity.KbMember;
 import com.example.javaai.model.entity.KnowledgeBase;
 import com.example.javaai.retrieval.HybridSearchService;
 import com.example.javaai.retrieval.SearchResult;
@@ -9,12 +15,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -25,11 +30,17 @@ public class RagPipeline {
     @Autowired
     private KnowledgeBaseMapper knowledgeBaseMapper;
     @Autowired
+    private KbMemberMapper kbMemberMapper;
+    @Autowired
+    private DocumentMapper documentMapper;
+    @Autowired
     private PromptTemplateManager promptTemplateManager;
     @Autowired
     private Map<String, ChatClient> chatClients;
 
     public RagResponse query(String userQuery, Long knowledgeBaseId) {
+        requireKbMember(knowledgeBaseId);
+
         KnowledgeBase kb = knowledgeBaseMapper.selectById(knowledgeBaseId);
         if (kb == null) {
             throw new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId);
@@ -80,18 +91,97 @@ public class RagPipeline {
                 .call()
                 .content();
         response.setAnswer(answer);
-
-        List<RagResponse.Citation> citations = new ArrayList<>();
-        for (SearchResult r : results) {
-            RagResponse.Citation citation = new RagResponse.Citation();
-            citation.setDocumentId(r.getDocumentId());
-            citation.setChunkIndex(r.getChunkIndex());
-            citation.setScore(r.getScore());
-            citations.add(citation);
-        }
-        response.setCitations(citations);
+        response.setCitations(buildCitations(results));
 
         return response;
+    }
+
+    public Flux<String> streamQuery(String userQuery, Long knowledgeBaseId, String modelProvider) {
+        requireKbMember(knowledgeBaseId);
+
+        KnowledgeBase kb = knowledgeBaseMapper.selectById(knowledgeBaseId);
+        if (kb == null) {
+            return Flux.just(StreamEvent.error("Knowledge base not found: " + knowledgeBaseId));
+        }
+
+        List<SearchResult> results;
+        try {
+            results = hybridSearchService.search(userQuery, knowledgeBaseId, 10);
+        } catch (Exception e) {
+            log.error("Hybrid search failed", e);
+            return Flux.just(StreamEvent.error("Search failed: " + e.getMessage()));
+        }
+
+        if (results.isEmpty()) {
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("query", userQuery);
+            String refusal = promptTemplateManager.render("evidence-insufficient-prompt", vars);
+            return Flux.just(
+                    StreamEvent.token(refusal),
+                    StreamEvent.done(null)
+            );
+        }
+
+        double avgScore = results.stream()
+                .mapToDouble(SearchResult::getScore)
+                .average()
+                .orElse(0.0);
+        BigDecimal threshold = kb.getEvidenceThreshold();
+
+        if (threshold != null && avgScore < threshold.doubleValue()) {
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("query", userQuery);
+            String refusal = promptTemplateManager.render("evidence-insufficient-prompt", vars);
+            return Flux.just(
+                    StreamEvent.token(refusal),
+                    StreamEvent.done(null)
+            );
+        }
+
+        String context = buildContext(results);
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("evidence", context);
+        vars.put("query", userQuery);
+        String prompt = promptTemplateManager.render("evidence-sufficient-prompt", vars);
+
+        ChatClient chatClient = resolveChatClient(modelProvider);
+        if (chatClient == null) {
+            return Flux.just(StreamEvent.error("AI model not available. Please configure an AI provider."));
+        }
+
+        List<RagResponse.Citation> citations = buildCitations(results);
+        String citationsJson = StreamEvent.citations(citations);
+
+        return chatClient.prompt()
+                .user(prompt)
+                .stream()
+                .content()
+                .map(StreamEvent::token)
+                .concatWithValues(citationsJson, StreamEvent.done(null));
+    }
+
+    private void requireKbMember(Long knowledgeBaseId) {
+        Long userId = GroupContext.getUserId();
+        if (userId == null) return;
+        Long count = kbMemberMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbMember>()
+                        .eq(KbMember::getKnowledgeBaseId, knowledgeBaseId)
+                        .eq(KbMember::getUserId, userId)
+        );
+        if (count == 0) {
+            throw new SecurityException("Access denied: you are not a member of knowledge base " + knowledgeBaseId);
+        }
+    }
+
+    public boolean isKbMember(Long knowledgeBaseId) {
+        Long userId = GroupContext.getUserId();
+        if (userId == null) return false;
+        Long count = kbMemberMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbMember>()
+                        .eq(KbMember::getKnowledgeBaseId, knowledgeBaseId)
+                        .eq(KbMember::getUserId, userId)
+        );
+        return count > 0;
     }
 
     private ChatClient resolveChatClient() {
@@ -99,6 +189,35 @@ public class RagPipeline {
             return chatClients.values().iterator().next();
         }
         return null;
+    }
+
+    private ChatClient resolveChatClient(String provider) {
+        if (chatClients != null && provider != null && chatClients.containsKey(provider)) {
+            return chatClients.get(provider);
+        }
+        return resolveChatClient();
+    }
+
+    private List<RagResponse.Citation> buildCitations(List<SearchResult> results) {
+        Set<Long> docIds = results.stream().map(SearchResult::getDocumentId).collect(Collectors.toSet());
+        Map<Long, String> fileNames = new HashMap<>();
+        for (Long docId : docIds) {
+            Document doc = documentMapper.selectById(docId);
+            if (doc != null) {
+                fileNames.put(docId, doc.getFileName());
+            }
+        }
+
+        List<RagResponse.Citation> citations = new ArrayList<>();
+        for (SearchResult r : results) {
+            RagResponse.Citation citation = new RagResponse.Citation();
+            citation.setDocumentId(r.getDocumentId());
+            citation.setFileName(fileNames.getOrDefault(r.getDocumentId(), null));
+            citation.setChunkIndex(r.getChunkIndex());
+            citation.setScore(r.getScore());
+            citations.add(citation);
+        }
+        return citations;
     }
 
     private String buildContext(List<SearchResult> results) {

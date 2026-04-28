@@ -1,11 +1,15 @@
 package com.example.javaai.config;
 
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemory;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.document.MetadataMode;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,9 +20,11 @@ import java.util.Map;
 public class AiConfig {
 
     private final AiProperties aiProperties;
+    private final EmbeddingProperties embeddingProperties;
 
-    public AiConfig(AiProperties aiProperties) {
+    public AiConfig(AiProperties aiProperties, EmbeddingProperties embeddingProperties) {
         this.aiProperties = aiProperties;
+        this.embeddingProperties = embeddingProperties;
     }
 
     @Bean
@@ -44,15 +50,31 @@ public class AiConfig {
                             .build();
 
                     OpenAiChatModel chatModel = new OpenAiChatModel(openAiApi, options);
-
                     ChatClient client = ChatClient.builder(chatModel).build();
                     clients.put(providerName, client);
                 } catch (Exception e) {
-                    org.slf4j.LoggerFactory.getLogger(AiConfig.class)
+                    LoggerFactory.getLogger(AiConfig.class)
                             .warn("Failed to create ChatClient for provider '{}': {}", providerName, e.getMessage());
                 }
             }
         }
         return clients;
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "custom.ai.embedding.enabled", havingValue = "true")
+    public OpenAiEmbeddingModel embeddingModel() {
+        String baseUrl = embeddingProperties.getBaseUrl();
+        String apiKey = embeddingProperties.getApiKey();
+        String model = embeddingProperties.getModel();
+
+        if (baseUrl == null || baseUrl.isBlank() || apiKey == null || apiKey.isBlank()) {
+            LoggerFactory.getLogger(AiConfig.class)
+                    .warn("Embedding config incomplete, embedding model will not be available");
+            return null;
+        }
+
+        OpenAiApi embeddingApi = new OpenAiApi(baseUrl, apiKey);
+        return new OpenAiEmbeddingModel(embeddingApi, MetadataMode.EMBED);
     }
 }

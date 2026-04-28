@@ -2,8 +2,8 @@ import type { KnowledgeBase, KbMember, PageResult } from '../types/knowledge-bas
 import { get, post, put, del } from '../utils/request'
 import request from '../utils/request'
 
-export async function listKnowledgeBases(groupId: number, page = 1, size = 10): Promise<PageResult<KnowledgeBase>> {
-  return get('/knowledge-bases', { groupId, page, size })
+export async function listKnowledgeBases(page = 1, size = 100): Promise<PageResult<KnowledgeBase>> {
+  return get('/knowledge-bases', { page, size })
 }
 
 export async function createKnowledgeBase(data: Partial<KnowledgeBase>): Promise<KnowledgeBase> {

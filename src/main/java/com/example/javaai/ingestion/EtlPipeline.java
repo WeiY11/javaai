@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
-import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -67,13 +67,14 @@ public class EtlPipeline {
             List<String> chunks = documentChunker.chunk(cleanedText, config);
             log.info("Chunked into {} pieces for document {}", chunks.size(), documentId);
 
-            saveChunks(doc, chunks);
+            List<DocumentChunk> savedChunks = saveChunks(doc, chunks);
 
             updateStatus(doc, "EMBEDDING");
-            List<String> vectorIds = embeddingService.embedAndStore(chunks, doc.getKnowledgeBaseId(), doc.getId());
+            embeddingService.embedAndStore(savedChunks);
 
             updateStatus(doc, "INDEXING");
-            elasticsearchIndexService.indexChunks(chunks, doc.getKnowledgeBaseId(), doc.getId());
+            List<String> chunkContents = chunks;
+            elasticsearchIndexService.indexChunks(chunkContents, doc.getKnowledgeBaseId(), doc.getId());
 
             doc.setIngestionStatus("COMPLETED");
             doc.setChunkCount(chunks.size());
@@ -84,7 +85,6 @@ public class EtlPipeline {
             log.error("ETL pipeline failed for document {}", documentId, e);
             doc.setIngestionStatus("FAILED");
             documentMapper.updateById(doc);
-            throw new RuntimeException("ETL pipeline failed", e);
         }
     }
 
@@ -108,7 +108,8 @@ public class EtlPipeline {
         }
     }
 
-    private void saveChunks(Document doc, List<String> chunks) {
+    private List<DocumentChunk> saveChunks(Document doc, List<String> chunks) {
+        List<DocumentChunk> saved = new ArrayList<>();
         for (int i = 0; i < chunks.size(); i++) {
             DocumentChunk chunk = new DocumentChunk();
             chunk.setDocumentId(doc.getId());
@@ -116,7 +117,9 @@ public class EtlPipeline {
             chunk.setContent(chunks.get(i));
             chunk.setChunkIndex(i);
             documentChunkMapper.insert(chunk);
+            saved.add(chunk);
         }
+        return saved;
     }
 
     private void updateStatus(Document doc, String status) {

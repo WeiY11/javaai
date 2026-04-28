@@ -17,9 +17,12 @@ public class RrfFusionService {
     }
 
     public List<SearchResult> fuse(List<SearchResult> semanticResults, List<SearchResult> keywordResults, int topN, int k) {
+        List<SearchResult> normSemantic = normalizeScores(semanticResults);
+        List<SearchResult> normKeyword = normalizeScores(keywordResults);
+
         Map<String, RrfEntry> entryMap = new LinkedHashMap<>();
 
-        List<SearchResult> sortedSemantic = semanticResults.stream()
+        List<SearchResult> sortedSemantic = normSemantic.stream()
                 .sorted(Comparator.comparingDouble(SearchResult::getScore).reversed())
                 .toList();
         for (int i = 0; i < sortedSemantic.size(); i++) {
@@ -28,7 +31,7 @@ public class RrfFusionService {
                     .addSemanticRank(i + 1, k);
         }
 
-        List<SearchResult> sortedKeyword = keywordResults.stream()
+        List<SearchResult> sortedKeyword = normKeyword.stream()
                 .sorted(Comparator.comparingDouble(SearchResult::getScore).reversed())
                 .toList();
         for (int i = 0; i < sortedKeyword.size(); i++) {
@@ -52,11 +55,29 @@ public class RrfFusionService {
         return fused;
     }
 
+    private List<SearchResult> normalizeScores(List<SearchResult> results) {
+        if (results.isEmpty()) return results;
+
+        double min = results.stream().mapToDouble(SearchResult::getScore).min().orElse(0.0);
+        double max = results.stream().mapToDouble(SearchResult::getScore).max().orElse(1.0);
+
+        if (max == min) {
+            return results.stream()
+                    .map(r -> new SearchResult(r.getChunkId(), r.getDocumentId(), r.getKnowledgeBaseId(),
+                            r.getContent(), r.getChunkIndex(), 1.0, r.getSource()))
+                    .collect(Collectors.toList());
+        }
+
+        return results.stream()
+                .map(r -> new SearchResult(r.getChunkId(), r.getDocumentId(), r.getKnowledgeBaseId(),
+                        r.getContent(), r.getChunkIndex(),
+                        (r.getScore() - min) / (max - min), r.getSource()))
+                .collect(Collectors.toList());
+    }
+
     private static class RrfEntry {
         final SearchResult result;
         double score = 0.0;
-        boolean hasSemantic = false;
-        boolean hasKeyword = false;
 
         RrfEntry(SearchResult result) {
             this.result = result;
@@ -64,12 +85,10 @@ public class RrfFusionService {
 
         void addSemanticRank(int rank, int k) {
             score += 1.0 / (k + rank);
-            hasSemantic = true;
         }
 
         void addKeywordRank(int rank, int k) {
             score += 1.0 / (k + rank);
-            hasKeyword = true;
         }
 
         double getScore() {

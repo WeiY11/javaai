@@ -57,7 +57,7 @@ const loading = ref(false)
 const showCreateDialog = ref(false)
 const createForm = reactive({
   name: '', description: '', chunkStrategy: 'PARAGRAPH' as const,
-  chunkSize: 500, chunkOverlap: 100, groupId: 1
+  chunkSize: 500, chunkOverlap: 100
 })
 
 async function handleCreate() {
@@ -71,7 +71,7 @@ async function handleCreate() {
 }
 
 onMounted(() => {
-  kbStore.loadKnowledgeBases(1)
+  kbStore.loadKnowledgeBases()
 })
 </script>
 

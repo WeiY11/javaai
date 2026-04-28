@@ -13,6 +13,7 @@ D:\javaai\src\main\java\com\example\javaai\config\AiProperties.java
 D:\javaai\src\main\java\com\example\javaai\config\AnalysisProperties.java
 D:\javaai\src\main\java\com\example\javaai\config\AsyncConfig.java
 D:\javaai\src\main\java\com\example\javaai\config\ElasticsearchConfig.java
+D:\javaai\src\main\java\com\example\javaai\config\EmbeddingProperties.java
 D:\javaai\src\main\java\com\example\javaai\config\JwtConfig.java
 D:\javaai\src\main\java\com\example\javaai\config\MinioConfig.java
 D:\javaai\src\main\java\com\example\javaai\config\MyBatisMetaObjectHandler.java
@@ -40,6 +41,7 @@ D:\javaai\src\main\java\com\example\javaai\JavaaiApplication.java
 D:\javaai\src\main\java\com\example\javaai\knowledgebase\KnowledgeBaseController.java
 D:\javaai\src\main\java\com\example\javaai\knowledgebase\KnowledgeBaseService.java
 D:\javaai\src\main\java\com\example\javaai\mapper\ConversationMapper.java
+D:\javaai\src\main\java\com\example\javaai\mapper\DocumentChunkEmbeddingMapper.java
 D:\javaai\src\main\java\com\example\javaai\mapper\DocumentChunkMapper.java
 D:\javaai\src\main\java\com\example\javaai\mapper\DocumentMapper.java
 D:\javaai\src\main\java\com\example\javaai\mapper\GroupMapper.java
@@ -57,12 +59,15 @@ D:\javaai\src\main\java\com\example\javaai\model\BatchProgress.java
 D:\javaai\src\main\java\com\example\javaai\model\dto\ApiResponse.java
 D:\javaai\src\main\java\com\example\javaai\model\dto\AuthResponse.java
 D:\javaai\src\main\java\com\example\javaai\model\dto\LoginRequest.java
+D:\javaai\src\main\java\com\example\javaai\model\dto\MessageRequest.java
 D:\javaai\src\main\java\com\example\javaai\model\dto\RefreshTokenRequest.java
 D:\javaai\src\main\java\com\example\javaai\model\dto\RegisterRequest.java
+D:\javaai\src\main\java\com\example\javaai\model\dto\StreamEvent.java
 D:\javaai\src\main\java\com\example\javaai\model\dto\UserInfo.java
 D:\javaai\src\main\java\com\example\javaai\model\entity\Conversation.java
 D:\javaai\src\main\java\com\example\javaai\model\entity\Document.java
 D:\javaai\src\main\java\com\example\javaai\model\entity\DocumentChunk.java
+D:\javaai\src\main\java\com\example\javaai\model\entity\DocumentChunkEmbedding.java
 D:\javaai\src\main\java\com\example\javaai\model\entity\Group.java
 D:\javaai\src\main\java\com\example\javaai\model\entity\GroupMember.java
 D:\javaai\src\main\java\com\example\javaai\model\entity\KbMember.java

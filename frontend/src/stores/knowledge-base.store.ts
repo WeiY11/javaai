@@ -8,8 +8,8 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   const currentKb = ref<KnowledgeBase | null>(null)
   const total = ref(0)
 
-  async function loadKnowledgeBases(groupId: number) {
-    const res = await kbApi.listKnowledgeBases(groupId)
+  async function loadKnowledgeBases() {
+    const res = await kbApi.listKnowledgeBases()
     knowledgeBases.value = res.records
     total.value = res.total
   }

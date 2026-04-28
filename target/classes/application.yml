@@ -45,6 +45,12 @@ jwt:
 
 custom:
   ai:
+    embedding:
+      enabled: true
+      base-url: ${EMBEDDING_BASE_URL:}
+      api-key: ${EMBEDDING_API_KEY:}
+      model: ${EMBEDDING_MODEL:}
+      dimension: 1536
     providers:
       deepseek:
         base-url: https://api.deepseek.com

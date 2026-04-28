@@ -5,13 +5,18 @@ import com.example.javaai.config.PromptTemplateManager;
 import com.example.javaai.identity.GroupContext;
 import com.example.javaai.mapper.ConversationMapper;
 import com.example.javaai.mapper.MessageMapper;
+import com.example.javaai.model.dto.StreamEvent;
 import com.example.javaai.model.entity.Conversation;
 import com.example.javaai.model.entity.Message;
+import com.example.javaai.qa.RagPipeline;
+import com.example.javaai.qa.RagResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 
 import java.util.HashMap;
 import java.util.List;
@@ -25,8 +30,10 @@ public class ConversationService {
     private final ConversationMapper conversationMapper;
     private final MessageMapper messageMapper;
     private final PromptTemplateManager promptTemplateManager;
+    private final RagPipeline ragPipeline;
 
     private static final int SUMMARY_WINDOW = 10;
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional
     public Conversation createConversation(Long knowledgeBaseId, String modelProvider) {
@@ -41,6 +48,7 @@ public class ConversationService {
 
     @Transactional
     public Message addMessage(Long conversationId, String role, String content, String citations, String toolCalls) {
+        requireConversationOwner(conversationId);
         Message msg = new Message();
         msg.setConversationId(conversationId);
         msg.setRole(role);
@@ -53,7 +61,71 @@ public class ConversationService {
         return msg;
     }
 
+    public Flux<String> streamMessage(Long conversationId, String content) {
+        Conversation conv = requireConversationOwner(conversationId);
+
+        Message userMsg = new Message();
+        userMsg.setConversationId(conversationId);
+        userMsg.setRole("user");
+        userMsg.setContent(content);
+        messageMapper.insert(userMsg);
+
+        if (conv.getKnowledgeBaseId() == null) {
+            messageMapper.deleteById(userMsg.getId());
+            return Flux.just(StreamEvent.error("请先选择知识库再发起对话"));
+        }
+
+        if (!ragPipeline.isKbMember(conv.getKnowledgeBaseId())) {
+            messageMapper.deleteById(userMsg.getId());
+            return Flux.just(StreamEvent.error("Access denied: you are not a member of this knowledge base"));
+        }
+
+        String modelProvider = conv.getModelProvider() != null ? conv.getModelProvider() : "deepseek";
+
+        StringBuilder fullContent = new StringBuilder();
+        String[] citationsHolder = new String[1];
+
+        return ragPipeline.streamQuery(content, conv.getKnowledgeBaseId(), modelProvider)
+                .map(event -> {
+                    try {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> map = objectMapper.readValue(event, Map.class);
+                        String type = (String) map.get("type");
+                        if ("token".equals(type)) {
+                            String text = (String) map.get("text");
+                            if (text != null) fullContent.append(text);
+                        } else if ("citations".equals(type)) {
+                            citationsHolder[0] = objectMapper.writeValueAsString(map.get("citations"));
+                        } else if ("done".equals(type)) {
+                            saveAssistantMessage(conversationId, fullContent.toString(), citationsHolder[0]);
+                            return "{\"type\":\"done\",\"messageId\":" + map.get("messageId") + "}";
+                        }
+                    } catch (JsonProcessingException e) {
+                        log.warn("Failed to parse stream event", e);
+                    }
+                    return event;
+                })
+                .doOnComplete(() -> {
+                    if (fullContent.length() > 0) {
+                        saveAssistantMessage(conversationId, fullContent.toString(), citationsHolder[0]);
+                    }
+                    checkAndGenerateSummary(conversationId);
+                })
+                .doOnError(e -> log.error("Stream error for conversation {}", conversationId, e));
+    }
+
+    private void saveAssistantMessage(Long conversationId, String content, String citations) {
+        if (content == null || content.isBlank()) return;
+        Message msg = new Message();
+        msg.setConversationId(conversationId);
+        msg.setRole("assistant");
+        msg.setContent(content);
+        msg.setCitations(citations);
+        messageMapper.insert(msg);
+    }
+
     public List<Message> getHistory(Long conversationId) {
+        requireConversationOwner(conversationId);
         return messageMapper.selectList(
                 new LambdaQueryWrapper<Message>()
                         .eq(Message::getConversationId, conversationId)
@@ -73,11 +145,24 @@ public class ConversationService {
 
     @Transactional
     public void deleteConversation(Long conversationId) {
+        requireConversationOwner(conversationId);
         Conversation conv = conversationMapper.selectById(conversationId);
         if (conv != null) {
             conv.setStatus("DELETED");
             conversationMapper.updateById(conv);
         }
+    }
+
+    private Conversation requireConversationOwner(Long conversationId) {
+        Conversation conv = conversationMapper.selectById(conversationId);
+        if (conv == null) {
+            throw new IllegalArgumentException("Conversation not found: " + conversationId);
+        }
+        Long userId = GroupContext.getUserId();
+        if (userId != null && !userId.equals(conv.getUserId())) {
+            throw new SecurityException("Access denied: you do not own this conversation");
+        }
+        return conv;
     }
 
     public String buildContext(Long conversationId, String currentQuery) {

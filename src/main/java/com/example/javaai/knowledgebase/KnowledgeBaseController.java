@@ -34,10 +34,10 @@ public class KnowledgeBaseController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<Page<KnowledgeBase>>> list(
-            @RequestParam Long groupId,
+            @RequestParam(required = false) Long groupId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(ApiResponse.success(knowledgeBaseService.listByGroup(groupId, page, size)));
+        return ResponseEntity.ok(ApiResponse.success(knowledgeBaseService.listAccessible(page, size)));
     }
 
     @GetMapping("/{id}")

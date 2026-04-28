@@ -2,11 +2,14 @@ package com.example.javaai.document;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.example.javaai.ingestion.EtlPipeline;
 import com.example.javaai.identity.GroupContext;
+import com.example.javaai.ingestion.EtlPipeline;
 import com.example.javaai.mapper.DocumentMapper;
-import com.example.javaai.model.dto.ApiResponse;
+import com.example.javaai.mapper.KbMemberMapper;
+import com.example.javaai.mapper.KnowledgeBaseMapper;
 import com.example.javaai.model.entity.Document;
+import com.example.javaai.model.entity.KbMember;
+import com.example.javaai.model.entity.KnowledgeBase;
 import com.example.javaai.storage.MinioStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +27,10 @@ public class DocumentService {
 
     @Autowired
     private DocumentMapper documentMapper;
+    @Autowired
+    private KnowledgeBaseMapper knowledgeBaseMapper;
+    @Autowired
+    private KbMemberMapper kbMemberMapper;
     @Autowired(required = false)
     private MinioStorageService minioStorageService;
     @Autowired
@@ -36,6 +43,8 @@ public class DocumentService {
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
 
     public Document upload(MultipartFile file, Long knowledgeBaseId) {
+        requireKbMember(knowledgeBaseId);
+
         if (minioStorageService == null) {
             throw new RuntimeException("MinIO storage not available");
         }
@@ -81,6 +90,7 @@ public class DocumentService {
     }
 
     public Page<Document> listByKnowledgeBase(Long kbId, int page, int size) {
+        requireKbMember(kbId);
         return documentMapper.selectPage(
                 new Page<>(page, size),
                 new LambdaQueryWrapper<Document>()
@@ -90,10 +100,18 @@ public class DocumentService {
     }
 
     public Document getById(Long id) {
-        return documentMapper.selectById(id);
+        Document doc = documentMapper.selectById(id);
+        if (doc != null) {
+            requireKbMember(doc.getKnowledgeBaseId());
+        }
+        return doc;
     }
 
     public void delete(Long id) {
+        Document doc = documentMapper.selectById(id);
+        if (doc != null) {
+            requireKbMember(doc.getKnowledgeBaseId());
+        }
         etlPipeline.deleteDocument(id);
     }
 
@@ -102,9 +120,23 @@ public class DocumentService {
         if (doc == null) {
             throw new IllegalArgumentException("Document not found: " + id);
         }
+        requireKbMember(doc.getKnowledgeBaseId());
         doc.setIngestionStatus("PENDING");
         documentMapper.updateById(doc);
         triggerIngestionAsync(id);
+    }
+
+    private void requireKbMember(Long knowledgeBaseId) {
+        Long userId = GroupContext.getUserId();
+        if (userId == null) return;
+        Long count = kbMemberMapper.selectCount(
+                new LambdaQueryWrapper<KbMember>()
+                        .eq(KbMember::getKnowledgeBaseId, knowledgeBaseId)
+                        .eq(KbMember::getUserId, userId)
+        );
+        if (count == 0) {
+            throw new SecurityException("Access denied: you are not a member of knowledge base " + knowledgeBaseId);
+        }
     }
 
     private String getFormat(String filename) {

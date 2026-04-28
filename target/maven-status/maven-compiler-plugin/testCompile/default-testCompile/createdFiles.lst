@@ -1,0 +1,3 @@
+com\example\javaai\ingestion\EtlPipelineTest.class
+com\example\javaai\retrieval\RrfFusionServiceTest.class
+com\example\javaai\qa\RagPipelineTest.class

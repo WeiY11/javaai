@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.javaai.identity.GroupContext;
 import com.example.javaai.mapper.KbMemberMapper;
 import com.example.javaai.mapper.KnowledgeBaseMapper;
-import com.example.javaai.model.dto.ApiResponse;
 import com.example.javaai.model.entity.KbMember;
 import com.example.javaai.model.entity.KnowledgeBase;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -61,18 +61,36 @@ public class KnowledgeBaseService {
         log.info("Deleted knowledge base id={}", kbId);
     }
 
-    public Page<KnowledgeBase> listByGroup(Long groupId, int page, int size) {
+    public Page<KnowledgeBase> listAccessible(int page, int size) {
+        Long userId = GroupContext.getUserId();
+        if (userId == null) {
+            return new Page<>(page, size);
+        }
+
+        List<Long> kbIds = kbMemberMapper.selectList(
+                new LambdaQueryWrapper<KbMember>()
+                        .eq(KbMember::getUserId, userId)
+        ).stream().map(KbMember::getKnowledgeBaseId).collect(Collectors.toList());
+
+        if (kbIds.isEmpty()) {
+            return new Page<>(page, size);
+        }
+
         return knowledgeBaseMapper.selectPage(
                 new Page<>(page, size),
                 new LambdaQueryWrapper<KnowledgeBase>()
-                        .eq(KnowledgeBase::getGroupId, groupId)
+                        .in(KnowledgeBase::getId, kbIds)
                         .eq(KnowledgeBase::getStatus, "ACTIVE")
                         .orderByDesc(KnowledgeBase::getCreatedAt)
         );
     }
 
     public KnowledgeBase getById(Long kbId) {
-        return knowledgeBaseMapper.selectById(kbId);
+        KnowledgeBase kb = knowledgeBaseMapper.selectById(kbId);
+        if (kb != null && !isMember(kbId) && !GroupContext.isAdmin()) {
+            throw new SecurityException("Access denied: you are not a member of this knowledge base");
+        }
+        return kb;
     }
 
     public boolean isOwner(Long kbId) {
@@ -122,6 +140,9 @@ public class KnowledgeBaseService {
     }
 
     public List<KbMember> listMembers(Long kbId) {
+        if (!isMember(kbId) && !GroupContext.isAdmin()) {
+            throw new SecurityException("Access denied: you are not a member of this knowledge base");
+        }
         return kbMemberMapper.selectList(
                 new LambdaQueryWrapper<KbMember>()
                         .eq(KbMember::getKnowledgeBaseId, kbId)

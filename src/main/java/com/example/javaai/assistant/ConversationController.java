@@ -1,12 +1,14 @@
 package com.example.javaai.assistant;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.javaai.model.dto.ApiResponse;
+import com.example.javaai.model.dto.MessageRequest;
 import com.example.javaai.model.entity.Conversation;
 import com.example.javaai.model.entity.Message;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -44,6 +46,11 @@ public class ConversationController {
             @RequestParam(required = false) String toolCalls) {
         return ResponseEntity.ok(ApiResponse.success(
                 conversationService.addMessage(id, role, content, citations, toolCalls)));
+    }
+
+    @PostMapping(value = "/{id}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> streamMessage(@PathVariable Long id, @RequestBody MessageRequest request) {
+        return conversationService.streamMessage(id, request.getContent());
     }
 
     @DeleteMapping("/{id}")
