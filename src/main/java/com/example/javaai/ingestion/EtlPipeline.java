@@ -33,6 +33,8 @@ public class EtlPipeline {
     private KnowledgeBaseMapper knowledgeBaseMapper;
     @Autowired(required = false)
     private MinioStorageService minioStorageService;
+    @Autowired(required = false)
+    private com.example.javaai.storage.LocalFileStorageService localFileStorageService;
     @Autowired
     private FileExtractorService fileExtractorService;
     @Autowired
@@ -109,12 +111,14 @@ public class EtlPipeline {
     }
 
     private String extract(Document doc) {
-        if (minioStorageService == null) {
-            throw new RuntimeException("MinIO storage not available");
+        if (minioStorageService == null && localFileStorageService == null) {
+            throw new RuntimeException("No storage service available");
         }
         try {
             java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("etl_", "_" + doc.getFileName());
-            try (InputStream is = minioStorageService.downloadFile(doc.getStoragePath())) {
+            try (InputStream is = minioStorageService != null
+                    ? minioStorageService.downloadFile(doc.getStoragePath())
+                    : localFileStorageService.downloadFile(doc.getStoragePath())) {
                 java.nio.file.Files.copy(is, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
             ExtractionResult result = fileExtractorService.extractFile(tempFile, Integer.MAX_VALUE);

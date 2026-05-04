@@ -1,0 +1,107 @@
+# ============================================================
+# Standalone 独立运行配置
+# 使用: java -jar javaai.jar --spring.profiles.active=standalone
+#
+# 特点:
+#   - H2 内嵌数据库 (无需 PostgreSQL)
+#   - 本地文件存储 (无需 MinIO)
+#   - 可选 Elasticsearch (不配置则纯关键词搜索降级)
+#   - 前端静态文件从 classpath 提供
+# ============================================================
+
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/javaai-standalone;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: javaai_standalone_2026
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-h2.sql
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+  flyway:
+    enabled: false
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  elasticsearch:
+    enabled: false
+    uris: ${ES_URIS:}
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+minio:
+  enabled: false
+
+jwt:
+  secret: ${JWT_SECRET:javaai-standalone-jwt-secret-change-in-production}
+  access-token-expiration: 86400000
+  refresh-token-expiration: 604800000
+
+custom:
+  standalone:
+    search:
+      enabled: true
+  ai:
+    embedding:
+      enabled: ${EMBEDDING_ENABLED:false}
+      base-url: ${EMBEDDING_BASE_URL:}
+      api-key: ${EMBEDDING_API_KEY:}
+      model: ${EMBEDDING_MODEL:text-embedding-3-small}
+      dimension: 1536
+    providers:
+      deepseek:
+        base-url: https://api.deepseek.com
+        api-key: ${DEEPSEEK_API_KEY:}
+        model: deepseek-chat
+        temperature: 0.7
+      zhipu:
+        base-url: https://open.bigmodel.cn/api/paas/v4/
+        api-key: ${ZHIPU_API_KEY:}
+        model: glm-4
+        temperature: 0.7
+      qianwen:
+        base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+        api-key: ${QIANWEN_API_KEY:}
+        model: qwen-turbo
+        temperature: 0.7
+      openai:
+        base-url: https://api.openai.com/v1
+        api-key: ${OPENAI_API_KEY:}
+        model: gpt-3.5-turbo
+        temperature: 0.7
+  data:
+    base-dir: ${DATA_BASE_DIR:./data}
+  analysis:
+    max-content-size: 512000
+    max-prompt-size: 100000
+    batch-max-files: 20
+    result-dir: .analysis-results
+    report-dir: .analysis-reports
+    pdf-font-path: ""
+
+server:
+  port: ${PORT:8080}
+
+logging:
+  level:
+    com.example.javaai: INFO

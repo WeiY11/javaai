@@ -10,6 +10,7 @@ import com.example.javaai.mapper.KnowledgeBaseMapper;
 import com.example.javaai.model.entity.Document;
 import com.example.javaai.model.entity.KbMember;
 import com.example.javaai.model.entity.KnowledgeBase;
+import com.example.javaai.storage.LocalFileStorageService;
 import com.example.javaai.storage.MinioStorageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,8 @@ public class DocumentService {
     private KbMemberMapper kbMemberMapper;
     @Autowired(required = false)
     private MinioStorageService minioStorageService;
+    @Autowired(required = false)
+    private LocalFileStorageService localFileStorageService;
     @Autowired
     private EtlPipeline etlPipeline;
 
@@ -45,8 +48,8 @@ public class DocumentService {
     public Document upload(MultipartFile file, Long knowledgeBaseId) {
         requireKbMember(knowledgeBaseId);
 
-        if (minioStorageService == null) {
-            throw new RuntimeException("MinIO storage not available");
+        if (minioStorageService == null && localFileStorageService == null) {
+            throw new RuntimeException("No storage service available");
         }
         String originalName = file.getOriginalFilename();
         String format = getFormat(originalName);
@@ -60,7 +63,11 @@ public class DocumentService {
 
         String objectName = knowledgeBaseId + "/" + System.currentTimeMillis() + "_" + originalName;
         try (InputStream is = file.getInputStream()) {
-            minioStorageService.uploadFile(objectName, is, file.getSize(), file.getContentType());
+            if (minioStorageService != null) {
+                minioStorageService.uploadFile(objectName, is, file.getSize(), file.getContentType());
+            } else {
+                localFileStorageService.uploadFile(objectName, is, file.getSize(), file.getContentType());
+            }
         } catch (IOException e) {
             throw new RuntimeException("File upload failed", e);
         }
