@@ -2,6 +2,8 @@ package com.example.javaai.ingestion;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.javaai.extractor.ExtractionResult;
+import com.example.javaai.extractor.metadata.AcademicPdfMetadataExtractor;
+import com.example.javaai.extractor.metadata.PaperMetadata;
 import com.example.javaai.mapper.DocumentChunkMapper;
 import com.example.javaai.mapper.DocumentMapper;
 import com.example.javaai.model.entity.Document;
@@ -41,6 +43,8 @@ public class EtlPipeline {
     private EmbeddingService embeddingService;
     @Autowired
     private ElasticsearchIndexService elasticsearchIndexService;
+    @Autowired(required = false)
+    private AcademicPdfMetadataExtractor academicMetadataExtractor;
 
     @Transactional
     public void processDocument(Long documentId) {
@@ -53,6 +57,22 @@ public class EtlPipeline {
             updateStatus(doc, "EXTRACTING");
             String rawText = extract(doc);
             log.info("Extracted {} chars from document {}", rawText.length(), documentId);
+
+            if (academicMetadataExtractor != null && "pdf".equalsIgnoreCase(doc.getFileFormat())) {
+                try {
+                    PaperMetadata metadata = academicMetadataExtractor.extract(rawText, doc.getFileName());
+                    if (metadata != null) {
+                        if (metadata.getDoi() != null) doc.setDoi(metadata.getDoi());
+                        if (metadata.getAuthors() != null) doc.setAuthors(String.join(", ", metadata.getAuthors()));
+                        if (metadata.getPublicationYear() != null) doc.setPublicationYear(metadata.getPublicationYear());
+                        if (metadata.getJournal() != null) doc.setJournal(metadata.getJournal());
+                        documentMapper.updateById(doc);
+                        log.info("Extracted paper metadata for document {}: title={}, doi={}", documentId, metadata.getTitle(), metadata.getDoi());
+                    }
+                } catch (Exception e) {
+                    log.warn("Paper metadata extraction failed for document {}: {}", documentId, e.getMessage());
+                }
+            }
 
             updateStatus(doc, "CLEANING");
             String cleanedText = textCleaner.clean(rawText);

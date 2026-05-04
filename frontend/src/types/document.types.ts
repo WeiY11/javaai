@@ -21,9 +21,4 @@ export interface AnalysisReport {
   createdAt: string
 }
 
-export interface PageResult<T> {
-  records: T[]
-  total: number
-  size: number
-  current: number
-}
+export type { PageResult } from './common.types'

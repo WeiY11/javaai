@@ -3,6 +3,12 @@ import { ref } from 'vue'
 import type { Conversation, ChatMessage, Citation } from '../types/chat.types'
 import * as chatApi from '../api/chat'
 
+export interface ModelParams {
+  temperature?: number
+  topP?: number
+  maxTokens?: number
+}
+
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref<Conversation[]>([])
   const currentConversation = ref<Conversation | null>(null)
@@ -29,7 +35,7 @@ export const useChatStore = defineStore('chat', () => {
     return conv
   }
 
-  async function sendMessage(content: string) {
+  async function sendMessage(content: string, params?: ModelParams) {
     if (!currentConversation.value) return
 
     if (!selectedKbId.value && !currentConversation.value.knowledgeBaseId) {
@@ -68,7 +74,8 @@ export const useChatStore = defineStore('chat', () => {
         onError(error: string) {
           assistantMsg.content = `错误: ${error}`
         }
-      })
+      }, params)
+      loadConversations()
     } catch (e: any) {
       assistantMsg.content = `错误: ${e.message || '请求失败'}`
     } finally {

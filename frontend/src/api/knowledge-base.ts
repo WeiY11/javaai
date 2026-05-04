@@ -1,6 +1,5 @@
 import type { KnowledgeBase, KbMember, PageResult } from '../types/knowledge-base.types'
 import { get, post, put, del } from '../utils/request'
-import request from '../utils/request'
 
 export async function listKnowledgeBases(page = 1, size = 100): Promise<PageResult<KnowledgeBase>> {
   return get('/knowledge-bases', { page, size })
@@ -23,8 +22,7 @@ export async function getKnowledgeBase(id: number): Promise<KnowledgeBase> {
 }
 
 export async function addMember(kbId: number, userId: number, role = 'MEMBER'): Promise<KbMember> {
-  const res = await request.post(`/api/v1/knowledge-bases/${kbId}/members`, null, { params: { userId, role } })
-  return res.data.data
+  return post(`/knowledge-bases/${kbId}/members`, { userId, role })
 }
 
 export async function removeMember(kbId: number, userId: number): Promise<void> {

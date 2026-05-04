@@ -1,14 +1,12 @@
 import type { Conversation, ChatMessage, Citation } from '../types/chat.types'
-import { get, del } from '../utils/request'
-import request from '../utils/request'
+import { get, post, put, del } from '../utils/request'
 
 export async function listConversations(): Promise<Conversation[]> {
   return get('/conversations')
 }
 
 export async function createConversation(knowledgeBaseId?: number, modelProvider = 'deepseek'): Promise<Conversation> {
-  const res = await request.post('/api/v1/conversations', null, { params: { knowledgeBaseId, modelProvider } })
-  return res.data.data
+  return post('/conversations', { knowledgeBaseId, modelProvider })
 }
 
 export async function getMessages(conversationId: number): Promise<ChatMessage[]> {
@@ -16,12 +14,19 @@ export async function getMessages(conversationId: number): Promise<ChatMessage[]
 }
 
 export async function addMessage(conversationId: number, role: string, content: string): Promise<ChatMessage> {
-  const res = await request.post(`/api/v1/conversations/${conversationId}/messages`, null, { params: { role, content } })
-  return res.data.data
+  return post(`/conversations/${conversationId}/messages`, { role, content })
 }
 
 export async function deleteConversation(conversationId: number): Promise<void> {
   return del(`/conversations/${conversationId}`)
+}
+
+export async function renameConversation(conversationId: number, title: string): Promise<Conversation> {
+  return put(`/conversations/${conversationId}/rename`, { title })
+}
+
+export async function exportConversation(conversationId: number, format = 'markdown'): Promise<string> {
+  return get(`/conversations/${conversationId}/export`, { format })
 }
 
 export interface StreamCallbacks {
@@ -34,7 +39,8 @@ export interface StreamCallbacks {
 export async function streamMessage(
   conversationId: number,
   content: string,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  params?: { temperature?: number; topP?: number; maxTokens?: number }
 ): Promise<void> {
   const token = localStorage.getItem('accessToken')
   const response = await fetch(`/api/v1/conversations/${conversationId}/messages/stream`, {
@@ -43,7 +49,7 @@ export async function streamMessage(
       'Content-Type': 'application/json',
       'Authorization': token ? `Bearer ${token}` : ''
     },
-    body: JSON.stringify({ content })
+    body: JSON.stringify({ content, ...params })
   })
 
   if (!response.ok) {

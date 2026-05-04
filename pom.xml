@@ -14,7 +14,7 @@
 	<name>javaai</name>
 	<description>RAG-enhanced AI Data Analysis Platform</description>
 	<properties>
-		<java.version>22</java.version>
+		<java.version>21</java.version>
 		<spring-ai.version>1.0.0-M1</spring-ai.version>
 		<mybatis-plus.version>3.5.12</mybatis-plus.version>
 		<jjwt.version>0.12.6</jjwt.version>

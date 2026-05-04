@@ -10,10 +10,15 @@
           新建会话
         </el-button>
       </div>
-      <div v-for="conv in chatStore.conversations" :key="conv.id"
+      <el-input v-model="searchQuery" placeholder="搜索会话..." size="small" clearable style="margin-bottom:8px" />
+      <div v-for="conv in filteredConversations" :key="conv.id"
            class="conv-item" :class="{ active: chatStore.currentConversation?.id === conv.id }"
            @click="chatStore.selectConversation(conv)">
-        <span>{{ conv.title || '新会话' }}</span>
+        <span v-if="editingConvId !== conv.id" @dblclick="startRename(conv)">
+          {{ conv.title || '新会话' }}
+        </span>
+        <el-input v-else v-model="renameTitle" size="small" style="width:140px"
+          @blur="finishRename(conv.id)" @keyup.enter="finishRename(conv.id)" ref="renameInputRef" />
         <el-button size="small" type="danger" text @click.stop="chatStore.deleteConversation(conv.id)">×</el-button>
       </div>
       <div style="margin-top:16px">
@@ -24,6 +29,21 @@
           <el-option label="OpenAI" value="openai" />
         </el-select>
       </div>
+      <el-collapse style="margin-top:12px">
+        <el-collapse-item title="模型参数">
+          <el-form label-position="top" size="small">
+            <el-form-item label="温度 (Temperature)">
+              <el-slider v-model="temperature" :min="0" :max="2" :step="0.1" show-input />
+            </el-form-item>
+            <el-form-item label="Top-P">
+              <el-slider v-model="topP" :min="0" :max="1" :step="0.05" show-input />
+            </el-form-item>
+            <el-form-item label="最大Token数">
+              <el-input-number v-model="maxTokens" :min="64" :max="8192" :step="64" size="small" style="width:100%" />
+            </el-form-item>
+          </el-form>
+        </el-collapse-item>
+      </el-collapse>
     </div>
     <div class="chat-main">
       <div v-if="!chatStore.currentConversation" class="empty-state">
@@ -64,10 +84,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useChatStore } from '../stores/chat.store'
 import { useKnowledgeBaseStore } from '../stores/knowledge-base.store'
 import { ElMessage } from 'element-plus'
+import { renameConversation } from '../api/chat'
+import type { Conversation } from '../types/chat.types'
 import MarkdownIt from 'markdown-it'
 
 const chatStore = useChatStore()
@@ -75,8 +97,23 @@ const kbStore = useKnowledgeBaseStore()
 const inputText = ref('')
 const modelProvider = ref('deepseek')
 const messagesRef = ref<HTMLElement>()
+const searchQuery = ref('')
+const editingConvId = ref<number | null>(null)
+const renameTitle = ref('')
+const renameInputRef = ref()
+const temperature = ref(0.7)
+const topP = ref(1.0)
+const maxTokens = ref(2048)
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
+
+const filteredConversations = computed(() => {
+  if (!searchQuery.value) return chatStore.conversations
+  const q = searchQuery.value.toLowerCase()
+  return chatStore.conversations.filter(c =>
+    (c.title || '').toLowerCase().includes(q)
+  )
+})
 
 function renderMarkdown(content: string): string {
   if (!content) return '<span class="streaming-cursor">▊</span>'
@@ -100,12 +137,32 @@ async function handleSend() {
   const text = inputText.value
   inputText.value = ''
   try {
-    await chatStore.sendMessage(text)
+    await chatStore.sendMessage(text, {
+      temperature: temperature.value,
+      topP: topP.value,
+      maxTokens: maxTokens.value
+    })
   } catch (e: any) {
     ElMessage.error(e.message || '发送失败')
   }
   await nextTick()
   scrollToBottom()
+}
+
+function startRename(conv: Conversation) {
+  editingConvId.value = conv.id
+  renameTitle.value = conv.title || ''
+  nextTick(() => {
+    renameInputRef.value?.focus?.()
+  })
+}
+
+async function finishRename(convId: number) {
+  if (renameTitle.value.trim()) {
+    await renameConversation(convId, renameTitle.value.trim())
+    await chatStore.loadConversations()
+  }
+  editingConvId.value = null
 }
 
 function scrollToBottom() {

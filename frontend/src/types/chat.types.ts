@@ -34,6 +34,6 @@ export interface Conversation {
 }
 
 export interface StreamEvent {
-  type: 'token' | 'citation' | 'done' | 'error'
+  type: 'token' | 'citations' | 'done' | 'error'
   data: string
 }

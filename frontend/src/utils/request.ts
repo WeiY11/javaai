@@ -15,26 +15,54 @@ request.interceptors.request.use((config) => {
   return config
 })
 
+let isRefreshing = false
+let refreshSubscribers: Array<(token: string) => void> = []
+
+function onTokenRefreshed(token: string) {
+  refreshSubscribers.forEach(cb => cb(token))
+  refreshSubscribers = []
+}
+
+function addRefreshSubscriber(cb: (token: string) => void) {
+  refreshSubscribers.push(cb)
+}
+
 request.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (refreshToken) {
-        try {
-          const res = await axios.post('/api/v1/auth/refresh', { refreshToken })
-          const { accessToken, refreshToken: newRefresh } = res.data.data
-          localStorage.setItem('accessToken', accessToken)
-          localStorage.setItem('refreshToken', newRefresh)
-          error.config.headers.Authorization = `Bearer ${accessToken}`
-          return request(error.config)
-        } catch {
-          localStorage.removeItem('accessToken')
-          localStorage.removeItem('refreshToken')
-          window.location.href = '/login'
-        }
-      } else {
+    const originalRequest = error.config
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise(resolve => {
+          addRefreshSubscriber((token: string) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`
+            resolve(request(originalRequest))
+          })
+        })
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        const refreshToken = localStorage.getItem('refreshToken')
+        if (!refreshToken) throw new Error('No refresh token')
+
+        const res = await axios.post('/api/v1/auth/refresh', { refreshToken })
+        const { accessToken, refreshToken: newRefresh } = res.data.data
+        localStorage.setItem('accessToken', accessToken)
+        localStorage.setItem('refreshToken', newRefresh)
+
+        onTokenRefreshed(accessToken)
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`
+        return request(originalRequest)
+      } catch {
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
         window.location.href = '/login'
+        return Promise.reject(error)
+      } finally {
+        isRefreshing = false
       }
     }
     return Promise.reject(error)

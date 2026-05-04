@@ -2,35 +2,25 @@ package com.example.javaai.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
+
 import java.time.LocalDateTime;
 
 @Data
-@TableName("document")
-public class Document {
+@TableName("research_note")
+public class ResearchNote {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private Long chunkId;
+    private Long documentId;
     private Long knowledgeBaseId;
-
-    private String fileName;
-
-    private String fileFormat;
-
-    private Long fileSize;
-
-    private String storagePath;
-
-    private String ingestionStatus;
-
-    private Integer chunkCount;
-
-    private Long uploaderId;
-
-    private String doi;
-    private String authors;
-    private Integer publicationYear;
-    private String journal;
+    private Long userId;
+    private String content;
+    private String highlight;
+    private Integer startOffset;
+    private Integer endOffset;
+    private String tags;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

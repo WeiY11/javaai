@@ -7,7 +7,7 @@ import com.example.javaai.service.AnalysisResultService;
 import com.example.javaai.service.ChatService;
 import com.example.javaai.service.FileExtractorService;
 import org.springframework.beans.factory.annotation.Value;
-import com.example.javaai.model.ApiResponse;
+import com.example.javaai.model.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;

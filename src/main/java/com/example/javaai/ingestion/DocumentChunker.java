@@ -30,8 +30,50 @@ public class DocumentChunker {
         return switch (config.getStrategy()) {
             case FIXED_LENGTH -> chunkFixedLength(text, config);
             case PARAGRAPH -> chunkByParagraph(text, config);
-            case SEMANTIC -> chunkByParagraph(text, config);
+            case SEMANTIC -> chunkSemantic(text, config);
         };
+    }
+
+    private List<String> chunkSemantic(String text, ChunkConfig config) {
+        List<String> sentences = splitSentences(text);
+        List<String> chunks = new ArrayList<>();
+        StringBuilder currentChunk = new StringBuilder();
+
+        for (String sentence : sentences) {
+            String trimmed = sentence.trim();
+            if (trimmed.isEmpty()) continue;
+
+            if (currentChunk.length() + trimmed.length() + 1 > config.getChunkSize()
+                    && currentChunk.length() > 0) {
+                chunks.add(currentChunk.toString().trim());
+                String overlapText = getOverlapText(currentChunk.toString(), config.getOverlap());
+                currentChunk = new StringBuilder(overlapText);
+            }
+
+            if (currentChunk.length() > 0) {
+                currentChunk.append(" ");
+            }
+            currentChunk.append(trimmed);
+        }
+
+        if (currentChunk.length() > 0) {
+            chunks.add(currentChunk.toString().trim());
+        }
+
+        log.debug("Chunked text into {} chunks (strategy=SEMANTIC, size={}, overlap={})",
+                chunks.size(), config.getChunkSize(), config.getOverlap());
+        return chunks;
+    }
+
+    private List<String> splitSentences(String text) {
+        List<String> sentences = new ArrayList<>();
+        java.util.regex.Matcher matcher =
+            java.util.regex.Pattern.compile("[^。！？.!?\\n]+[。！？.!?\\n]*").matcher(text);
+        while (matcher.find()) {
+            String s = matcher.group().trim();
+            if (!s.isEmpty()) sentences.add(s);
+        }
+        return sentences;
     }
 
     private List<String> chunkFixedLength(String text, ChunkConfig config) {

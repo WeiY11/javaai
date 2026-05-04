@@ -19,18 +19,9 @@ public class ChatService {
         this.chatMemory = chatMemory;
     }
 
-    /**
-     * 根据 provider 选择对应的 ChatClient，并加上历史上下文进行流式对话
-     */
     public Flux<String> streamChat(String provider, String message, String sessionId) {
-        ChatClient baseClient = chatClients.get(provider);
-        if (baseClient == null) {
-            // 如果传入的 provider 不存在，默认使用 map 里的第一个或者抛出异常
-            baseClient = chatClients.values().iterator().next();
-        }
+        ChatClient baseClient = resolveClient(provider);
 
-        // 每次调用时通过 mutate 增加 advisor，这样可以保证请求间的隔离，
-        // 并且利用 sessionId 读取属于该用户的聊天记录（默认保留最近的 100 条）
         return baseClient.mutate()
                 .defaultAdvisors(new MessageChatMemoryAdvisor(chatMemory, sessionId, 100))
                 .build()
@@ -39,5 +30,26 @@ public class ChatService {
                 .user(message)
                 .stream()
                 .content();
+    }
+
+    public String chatSync(String provider, String message, String sessionId) {
+        ChatClient baseClient = resolveClient(provider);
+
+        return baseClient.mutate()
+                .defaultAdvisors(new MessageChatMemoryAdvisor(chatMemory, sessionId, 100))
+                .build()
+                .prompt()
+                .system("你是一个具有本地数据文件管理、内容检索和历史分析结果查询能力的智能 AI 助手。")
+                .user(message)
+                .call()
+                .content();
+    }
+
+    private ChatClient resolveClient(String provider) {
+        ChatClient baseClient = chatClients.get(provider);
+        if (baseClient == null) {
+            baseClient = chatClients.values().iterator().next();
+        }
+        return baseClient;
     }
 }

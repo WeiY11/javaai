@@ -12,8 +12,8 @@ import com.example.javaai.qa.RagPipeline;
 import com.example.javaai.qa.RagResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -24,13 +24,25 @@ import java.util.Map;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ConversationService {
 
     private final ConversationMapper conversationMapper;
     private final MessageMapper messageMapper;
     private final PromptTemplateManager promptTemplateManager;
     private final RagPipeline ragPipeline;
+    private final Map<String, ChatClient> chatClients;
+
+    public ConversationService(ConversationMapper conversationMapper,
+                               MessageMapper messageMapper,
+                               PromptTemplateManager promptTemplateManager,
+                               RagPipeline ragPipeline,
+                               Map<String, ChatClient> chatClients) {
+        this.conversationMapper = conversationMapper;
+        this.messageMapper = messageMapper;
+        this.promptTemplateManager = promptTemplateManager;
+        this.ragPipeline = ragPipeline;
+        this.chatClients = chatClients;
+    }
 
     private static final int SUMMARY_WINDOW = 10;
     private static final ObjectMapper objectMapper = new ObjectMapper();
@@ -62,7 +74,20 @@ public class ConversationService {
     }
 
     public Flux<String> streamMessage(Long conversationId, String content) {
+        return streamMessage(conversationId, content, null, null, null);
+    }
+
+    public Flux<String> streamMessage(Long conversationId, String content,
+                                       Double temperature, Double topP, Integer maxTokens) {
         Conversation conv = requireConversationOwner(conversationId);
+
+        if (conv.getKnowledgeBaseId() == null) {
+            return Flux.just(StreamEvent.error("请先选择知识库再发起对话"));
+        }
+
+        if (!ragPipeline.isKbMember(conv.getKnowledgeBaseId())) {
+            return Flux.just(StreamEvent.error("Access denied: you are not a member of this knowledge base"));
+        }
 
         Message userMsg = new Message();
         userMsg.setConversationId(conversationId);
@@ -70,22 +95,13 @@ public class ConversationService {
         userMsg.setContent(content);
         messageMapper.insert(userMsg);
 
-        if (conv.getKnowledgeBaseId() == null) {
-            messageMapper.deleteById(userMsg.getId());
-            return Flux.just(StreamEvent.error("请先选择知识库再发起对话"));
-        }
-
-        if (!ragPipeline.isKbMember(conv.getKnowledgeBaseId())) {
-            messageMapper.deleteById(userMsg.getId());
-            return Flux.just(StreamEvent.error("Access denied: you are not a member of this knowledge base"));
-        }
-
         String modelProvider = conv.getModelProvider() != null ? conv.getModelProvider() : "deepseek";
 
         StringBuilder fullContent = new StringBuilder();
         String[] citationsHolder = new String[1];
 
-        return ragPipeline.streamQuery(content, conv.getKnowledgeBaseId(), modelProvider)
+        return ragPipeline.streamQuery(content, conv.getKnowledgeBaseId(), modelProvider,
+                temperature, topP, maxTokens)
                 .map(event -> {
                     try {
                         @SuppressWarnings("unchecked")
@@ -191,6 +207,63 @@ public class ConversationService {
         return context.toString();
     }
 
+    private String generateSummaryWithAI(String summaryPrompt) {
+        ChatClient chatClient = resolveChatClient();
+        if (chatClient == null) return summaryPrompt;
+        try {
+            String result = chatClient.prompt()
+                    .user(summaryPrompt)
+                    .call()
+                    .content();
+            return result != null && !result.isBlank() ? result : summaryPrompt;
+        } catch (Exception e) {
+            log.warn("Failed to generate summary with AI, using prompt as fallback", e);
+            return summaryPrompt;
+        }
+    }
+
+    private ChatClient resolveChatClient() {
+        if (chatClients != null && !chatClients.isEmpty()) {
+            String provider = "deepseek";
+            if (chatClients.containsKey(provider)) {
+                return chatClients.get(provider);
+            }
+            return chatClients.values().iterator().next();
+        }
+        return null;
+    }
+
+    @Transactional
+    public Conversation renameConversation(Long conversationId, String title) {
+        Conversation conv = requireConversationOwner(conversationId);
+        if (conv != null && title != null && !title.isBlank()) {
+            conv.setTitle(title.trim());
+            conversationMapper.updateById(conv);
+        }
+        return conv;
+    }
+
+    public void generateAutoTitle(Long conversationId, String firstResponse) {
+        ChatClient chatClient = resolveChatClient();
+        if (chatClient == null) return;
+        try {
+            String truncated = firstResponse.length() > 200 ? firstResponse.substring(0, 200) : firstResponse;
+            String title = chatClient.prompt()
+                    .user("为以下AI助手的回答生成一个简短的标题（不超过20字，只返回标题文本，不要引号）:\n" + truncated)
+                    .call()
+                    .content();
+            if (title != null && !title.isBlank()) {
+                Conversation conv = conversationMapper.selectById(conversationId);
+                if (conv != null && conv.getTitle() == null) {
+                    conv.setTitle(title.trim());
+                    conversationMapper.updateById(conv);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to generate auto title for conversation {}", conversationId, e);
+        }
+    }
+
     private void checkAndGenerateSummary(Long conversationId) {
         Long count = messageMapper.selectCount(
                 new LambdaQueryWrapper<Message>()
@@ -216,7 +289,8 @@ public class ConversationService {
                 vars.put("messages", historyText.toString());
 
                 String summaryPrompt = promptTemplateManager.render("summary-prompt", vars);
-                conv.setSummary(summaryPrompt);
+                String summary = generateSummaryWithAI(summaryPrompt);
+                conv.setSummary(summary);
                 conversationMapper.updateById(conv);
                 log.info("Generated summary for conversation {}", conversationId);
             }

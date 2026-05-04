@@ -75,6 +75,14 @@ public class AiConfig {
         }
 
         OpenAiApi embeddingApi = new OpenAiApi(baseUrl, apiKey);
-        return new OpenAiEmbeddingModel(embeddingApi, MetadataMode.EMBED);
+        OpenAiEmbeddingModel embeddingModel = new OpenAiEmbeddingModel(embeddingApi, MetadataMode.EMBED);
+        LoggerFactory.getLogger(AiConfig.class)
+                .info("Embedding model created: model={}, dimension={}", model, embeddingProperties.getDimension());
+        return embeddingModel;
+    }
+
+    @Bean
+    public int embeddingDimension() {
+        return embeddingProperties.getDimension();
     }
 }

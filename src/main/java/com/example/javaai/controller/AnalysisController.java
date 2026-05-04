@@ -2,7 +2,7 @@ package com.example.javaai.controller;
 
 import com.example.javaai.config.AnalysisProperties;
 import com.example.javaai.extractor.ExtractionResult;
-import com.example.javaai.model.*;
+import com.example.javaai.model.dto.ApiResponse;
 import com.example.javaai.service.*;
 import org.springframework.beans.factory.annotation.Value;
 import io.swagger.v3.oas.annotations.Operation;
@@ -173,11 +173,7 @@ public class AnalysisController {
                         file.getName(), content
                     );
 
-                    String analysisContent = chatService.streamChat(provider, prompt, sessionId)
-                        .collectList()
-                        .block()
-                        .stream()
-                        .reduce("", (a, b) -> a + b);
+                    String analysisContent = chatService.chatSync(provider, prompt, sessionId);
 
                     String resultId = UUID.randomUUID().toString();
                     AnalysisResult analysisResult = new AnalysisResult(
@@ -286,12 +282,7 @@ public class AnalysisController {
                         file.getName(), content
                     );
 
-                    // 同步收集流式结果
-                    String analysisContent = chatService.streamChat(provider, prompt, sessionId)
-                        .collectList()
-                        .block()
-                        .stream()
-                        .reduce("", (a, b) -> a + b);
+                    String analysisContent = chatService.chatSync(provider, prompt, sessionId);
 
                     // 保存结果
                     String resultId = UUID.randomUUID().toString();
@@ -377,7 +368,7 @@ public class AnalysisController {
         List<AnalysisResult> results = analysisResultService.getResultsByIds(ids);
         String relativePath = reportExportService.exportMarkdown(results, title);
 
-        Path filePath = Paths.get(baseDir, relativePath);
+        Path filePath = safePath(relativePath);
         File file = filePath.toFile();
         InputStreamResource resource = new InputStreamResource(new FileInputStream(file));
 
@@ -402,7 +393,7 @@ public class AnalysisController {
         List<AnalysisResult> results = analysisResultService.getResultsByIds(ids);
         String relativePath = reportExportService.exportPdf(results, title);
 
-        Path filePath = Paths.get(baseDir, relativePath);
+        Path filePath = safePath(relativePath);
         File file = filePath.toFile();
         InputStreamResource resource = new InputStreamResource(new FileInputStream(file));
 
