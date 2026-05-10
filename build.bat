@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ==========================================
-echo   javaai 独立包构建脚本
+echo   evimind 独立包构建脚本
 echo ==========================================
 
 echo [1/3] 构建前端...
@@ -31,7 +31,7 @@ if %ERRORLEVEL% NEQ 0 (
 echo.
 echo ==========================================
 echo   构建完成！
-echo   输出: target\javaai-0.0.1-SNAPSHOT.jar
+echo   输出: target\evimind-0.0.1-SNAPSHOT.jar
 echo   启动: start.bat
 echo ==========================================
 pause

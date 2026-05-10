@@ -19,6 +19,30 @@ const router = createRouter({
       name: 'KnowledgeBases',
       component: () => import('../views/KnowledgeBaseView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/documents',
+      name: 'Documents',
+      component: () => import('../views/DocumentView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/analysis',
+      name: 'Analysis',
+      component: () => import('../views/AnalysisView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/citations',
+      name: 'Citations',
+      component: () => import('../views/CitationView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/notes',
+      name: 'Notes',
+      component: () => import('../views/NotesView.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

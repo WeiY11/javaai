@@ -2,7 +2,7 @@
 set -e
 
 echo "=========================================="
-echo "  javaai 独立包构建脚本"
+echo "  evimind 独立包构建脚本"
 echo "=========================================="
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,6 +24,6 @@ echo "[3/3] 构建后端 JAR..."
 echo ""
 echo "=========================================="
 echo "  构建完成！"
-echo "  输出: target/javaai-0.0.1-SNAPSHOT.jar"
+echo "  输出: target/evimind-0.0.1-SNAPSHOT.jar"
 echo "  启动: ./start.sh"
 echo "=========================================="

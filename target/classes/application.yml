@@ -1,11 +1,11 @@
 spring:
   application:
-    name: javaai
+    name: evimind
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:javaai}
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:evimind}
     driver-class-name: org.postgresql.Driver
-    username: ${POSTGRES_USER:javaai}
-    password: ${POSTGRES_PASSWORD:javaai123}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
@@ -34,12 +34,12 @@ springdoc:
 minio:
   enabled: true
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
-  access-key: ${MINIO_ACCESS_KEY:minioadmin}
-  secret-key: ${MINIO_SECRET_KEY:minioadmin}
-  bucket: ${MINIO_BUCKET:javaai-documents}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
+  bucket: ${MINIO_BUCKET:evimind-documents}
 
 jwt:
-  secret: ${JWT_SECRET:myDefaultJwtSecretKeyForDevOnlyPleaseReplaceInProduction2026}
+  secret: ${JWT_SECRET}
   access-token-expiration: 3600000
   refresh-token-expiration: 604800000
 
@@ -54,22 +54,22 @@ custom:
     providers:
       deepseek:
         base-url: https://api.deepseek.com
-        api-key: ${DEEPSEEK_API_KEY:your-deepseek-key}
+        api-key: ${DEEPSEEK_API_KEY}
         model: deepseek-chat
         temperature: 0.7
       zhipu:
         base-url: https://open.bigmodel.cn/api/paas/v4/
-        api-key: ${ZHIPU_API_KEY:your-zhipu-key}
+        api-key: ${ZHIPU_API_KEY}
         model: glm-4
         temperature: 0.7
       qianwen:
         base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-        api-key: ${QIANWEN_API_KEY:your-qianwen-key}
+        api-key: ${QIANWEN_API_KEY}
         model: qwen-turbo
         temperature: 0.7
       openai:
         base-url: https://api.openai.com/v1
-        api-key: ${OPENAI_API_KEY:your-openai-key}
+        api-key: ${OPENAI_API_KEY}
         model: gpt-3.5-turbo
         temperature: 0.7
   data:
@@ -87,5 +87,5 @@ server:
 
 logging:
   level:
-    com.example.javaai: INFO
+    com.example.evimind: INFO
     org.springframework.ai: DEBUG

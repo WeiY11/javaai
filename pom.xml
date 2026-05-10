@@ -9,10 +9,10 @@
 		<relativePath/>
 	</parent>
 	<groupId>com.example</groupId>
-	<artifactId>javaai</artifactId>
+	<artifactId>evimind</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>javaai</name>
-	<description>RAG-enhanced AI Data Analysis Platform</description>
+	<name>EviMind</name>
+	<description>Evidence-grounded RAG knowledge workspace</description>
 	<properties>
 		<java.version>21</java.version>
 		<spring-ai.version>1.0.0-M1</spring-ai.version>

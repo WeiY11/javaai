@@ -1,4 +1,4 @@
-# javaai — RAG 增强的 AI 智能数据分析平台
+# EviMind — RAG 增强的 AI 智能数据分析平台
 
 > 一个完整的企业级 RAG（Retrieval-Augmented Generation）应用，涵盖文档摄入、向量检索、混合搜索、AI 对话、权限管理等全链路能力。
 
@@ -25,7 +25,7 @@
 
 ## 1. 项目定位
 
-**javaai** 是一个基于 **RAG（检索增强生成）** 架构的 AI 文档分析与智能问答平台。核心能力：
+**EviMind** 是一个基于 **RAG（检索增强生成）** 架构的 AI 文档分析与智能问答平台。核心能力：
 
 - 用户上传 PDF、Word、Excel、CSV、JSON、TXT 等格式文档
 - 系统自动完成**文本提取 → 清洗 → 切片 → 向量嵌入 → 双路索引**的全自动 ETL 流水线
@@ -190,7 +190,7 @@
 ## 4. 项目目录结构
 
 ```
-d:\javaai\
+d:\evimind\
 │
 ├── .codeartsdoer/                       # 设计规格文档（需求→设计→任务）
 │   ├── AGENTS.md                        # 工程上下文元信息
@@ -204,8 +204,8 @@ d:\javaai\
 │           ├── design.md                # 1250+ 行详细设计
 │           └── tasks.md                 # 任务拆解
 │
-├── src/main/java/com/example/javaai/    # ★ Java 后端源码 (53 个文件)
-│   ├── JavaaiApplication.java          # Spring Boot 启动类
+├── src/main/java/com/example/evimind/    # ★ Java 后端源码 (53 个文件)
+│   ├── EvimindApplication.java          # Spring Boot 启动类
 │   │
 │   ├── auth/                            # 认证授权模块
 │   │   ├── AuthController.java          # 注册/登录/刷新/用户信息
@@ -529,7 +529,7 @@ ES 原生 BM25 评分算法，不需要额外调参。查询时用 `bool` 组合
 └─────────────┘                                  └──────────────┘
 ```
 
-**JWT 过滤器实现要点**（[JwtAuthenticationFilter.java](src/main/java/com/example/javaai/auth/JwtAuthenticationFilter.java)）：
+**JWT 过滤器实现要点**（[JwtAuthenticationFilter.java](src/main/java/com/example/evimind/auth/JwtAuthenticationFilter.java)）：
 
 1. 继承 `OncePerRequestFilter`，保证每个请求只过滤一次
 2. 从 `Authorization: Bearer <token>` 头提取令牌
@@ -540,7 +540,7 @@ ES 原生 BM25 评分算法，不需要额外调参。查询时用 `bool` 组合
 
 ### 6.2 AI 多模型管理
 
-**设计思路**（[AiConfig.java](src/main/java/com/example/javaai/config/AiConfig.java)）：
+**设计思路**（[AiConfig.java](src/main/java/com/example/evimind/config/AiConfig.java)）：
 
 四种模型提供商（DeepSeek / Zhipu / Qwen / OpenAI）虽然 API 域名不同，但都兼容 OpenAI 的 Chat Completion 格式，所以统一使用 Spring AI 的 `OpenAiApi` 作为底层 HTTP 客户端。
 
@@ -562,7 +562,7 @@ for (provider in [deepseek, zhipu, qianwen, openai]) {
 
 ### 6.3 Prompt 模板系统
 
-**为什么需要模板系统**（[PromptTemplateManager.java](src/main/java/com/example/javaai/config/PromptTemplateManager.java)）：
+**为什么需要模板系统**（[PromptTemplateManager.java](src/main/java/com/example/evimind/config/PromptTemplateManager.java)）：
 
 - Prompt 工程是 AI 应用的核心，需要频繁调整
 - 将模板与 Java 代码解耦，修改模板不需要重新编译
@@ -621,7 +621,7 @@ this.setFieldValByName("updatedAt", new Date(), metaObject);
 
 ### 6.5 SSR 流式事件格式
 
-**后端 SSE 事件格式**（[StreamEvent.java](src/main/java/com/example/javaai/model/dto/StreamEvent.java)）：
+**后端 SSE 事件格式**（[StreamEvent.java](src/main/java/com/example/evimind/model/dto/StreamEvent.java)）：
 
 ```json
 // 逐 token 事件
@@ -1177,9 +1177,9 @@ server {
 
 ```
 .env.example                      # 模板文件，提交到 Git
-├── POSTGRES_DB=javaai
-├── POSTGRES_USER=javaai
-├── POSTGRES_PASSWORD=javaai123
+├── POSTGRES_DB=evimind
+├── POSTGRES_USER=evimind
+├── POSTGRES_PASSWORD=evimind123
 ├── POSTGRES_PORT=5432
 ├── ES_URIS=http://localhost:9200
 ├── MINIO_ACCESS_KEY=minioadmin
@@ -1585,7 +1585,7 @@ SELECT * FROM message WHERE citations @> '[{"score":0.9}]';
 ```yaml
 postgres:
   healthcheck:
-    test: ["CMD-SHELL", "pg_isready -U javaai"]
+    test: ["CMD-SHELL", "pg_isready -U evimind"]
     interval: 10s
     timeout: 5s
     retries: 5

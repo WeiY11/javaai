@@ -1,10 +1,10 @@
 #!/bin/bash
 echo "=========================================="
-echo "  javaai - AI 数据分析平台"
+echo "  evimind - AI 数据分析平台"
 echo "  http://localhost:8080"
 echo "=========================================="
 
-JAR_FILE="target/javaai-0.0.1-SNAPSHOT.jar"
+JAR_FILE="target/evimind-0.0.1-SNAPSHOT.jar"
 
 if [ ! -f "$JAR_FILE" ]; then
     echo "未找到 JAR 文件，请先运行 build.sh"

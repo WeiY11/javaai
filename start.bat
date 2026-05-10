@@ -1,14 +1,14 @@
 @echo off
 chcp 65001 >nul
-title javaai 独立应用
+title evimind 独立应用
 
 echo ==========================================
-echo   javaai - AI 数据分析平台
+echo   evimind - AI 数据分析平台
 echo   http://localhost:8080
 echo ==========================================
 
 REM 检查 JAR 是否存在
-if not exist "target\javaai-0.0.1-SNAPSHOT.jar" (
+if not exist "target\evimind-0.0.1-SNAPSHOT.jar" (
     echo 未找到 JAR 文件，请先运行 build.bat
     pause
     exit /b 1
@@ -25,6 +25,6 @@ if not exist "data" mkdir data
 
 echo.
 echo 启动服务...
-java -jar target\javaai-0.0.1-SNAPSHOT.jar --spring.profiles.active=standalone
+java -jar target\evimind-0.0.1-SNAPSHOT.jar --spring.profiles.active=standalone
 
 pause

@@ -1,6 +1,6 @@
 # ============================================================
 # Standalone 独立运行配置
-# 使用: java -jar javaai.jar --spring.profiles.active=standalone
+# 使用: java -jar evimind.jar --spring.profiles.active=standalone
 #
 # 特点:
 #   - H2 内嵌数据库 (无需 PostgreSQL)
@@ -11,10 +11,10 @@
 
 spring:
   datasource:
-    url: jdbc:h2:file:./data/javaai-standalone;MODE=PostgreSQL
+    url: jdbc:h2:file:./data/evimind-standalone;MODE=PostgreSQL
     driver-class-name: org.h2.Driver
     username: sa
-    password: javaai_standalone_2026
+    password: evimind_standalone_2026
   sql:
     init:
       mode: always
@@ -32,7 +32,7 @@ spring:
       path: /h2-console
   elasticsearch:
     enabled: false
-    uris: ${ES_URIS:}
+    uris: ${ES_URIS:http://localhost:9200}
 
   servlet:
     multipart:
@@ -53,7 +53,7 @@ minio:
   enabled: false
 
 jwt:
-  secret: ${JWT_SECRET:javaai-standalone-jwt-secret-change-in-production}
+  secret: ${JWT_SECRET:evimind-standalone-jwt-secret-change-in-production}
   access-token-expiration: 86400000
   refresh-token-expiration: 604800000
 
@@ -104,4 +104,4 @@ server:
 
 logging:
   level:
-    com.example.javaai: INFO
+    com.example.evimind: INFO

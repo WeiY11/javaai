@@ -1,19 +1,28 @@
 import axios from 'axios'
 import type { ApiResponse } from '../types/api.types'
 
+function attachAuth(config: any) {
+  const token = localStorage.getItem('accessToken')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+}
+
 const request = axios.create({
   baseURL: '/api/v1',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' }
 })
 
-request.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
+export const rootRequest = axios.create({
+  baseURL: '/api',
+  timeout: 30000,
+  headers: { 'Content-Type': 'application/json' }
 })
+
+request.interceptors.request.use(attachAuth)
+rootRequest.interceptors.request.use(attachAuth)
 
 let isRefreshing = false
 let refreshSubscribers: Array<(token: string) => void> = []
@@ -69,6 +78,18 @@ request.interceptors.response.use(
   }
 )
 
+rootRequest.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
 export async function get<T>(url: string, params?: Record<string, any>): Promise<T> {
   const res = await request.get<ApiResponse<T>>(url, { params })
   return res.data.data
@@ -98,6 +119,16 @@ export async function upload<T>(url: string, file: File, fields: Record<string, 
   const res = await request.post<ApiResponse<T>>(url, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
+  return res.data.data
+}
+
+export async function rootGet<T>(url: string, params?: Record<string, any>): Promise<T> {
+  const res = await rootRequest.get<ApiResponse<T>>(url, { params })
+  return res.data.data
+}
+
+export async function rootPost<T>(url: string, data?: any): Promise<T> {
+  const res = await rootRequest.post<ApiResponse<T>>(url, data)
   return res.data.data
 }
 

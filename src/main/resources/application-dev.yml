@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:file:./data/javaai-dev
+    url: jdbc:h2:file:./data/evimind-dev
     driver-class-name: org.h2.Driver
     username: sa
     password: password
@@ -27,7 +27,7 @@ minio:
   endpoint: http://localhost:9000
   access-key: minioadmin
   secret-key: minioadmin
-  bucket: javaai-documents
+  bucket: evimind-documents
 
 jwt:
   secret: dev-only-secret-key-for-local-testing-2026
