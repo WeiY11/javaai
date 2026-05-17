@@ -97,11 +97,12 @@ public class RagPipeline {
     }
 
     public Flux<String> streamQuery(String userQuery, Long knowledgeBaseId, String modelProvider) {
-        return streamQuery(userQuery, knowledgeBaseId, modelProvider, null, null, null);
+        return streamQuery(userQuery, knowledgeBaseId, modelProvider, null, null, null, null, null, null);
     }
 
     public Flux<String> streamQuery(String userQuery, Long knowledgeBaseId, String modelProvider,
-                                     Double temperature, Double topP, Integer maxTokens) {
+                                     Double temperature, Double topP, Integer maxTokens,
+                                     String modelName, Boolean thinking, String reasoningEffort) {
         requireKbMember(knowledgeBaseId);
 
         KnowledgeBase kb = knowledgeBaseMapper.selectById(knowledgeBaseId);
@@ -159,13 +160,23 @@ public class RagPipeline {
 
         var promptSpec = chatClient.prompt().user(prompt);
 
-        if (temperature != null || topP != null || maxTokens != null) {
-            var optionsBuilder = org.springframework.ai.openai.OpenAiChatOptions.builder();
-            if (temperature != null) optionsBuilder.withTemperature(temperature.floatValue());
-            if (topP != null) optionsBuilder.withTopP(topP.floatValue());
-            if (maxTokens != null) optionsBuilder.withMaxTokens(maxTokens);
-            promptSpec = promptSpec.options(optionsBuilder.build());
+        String actualModelName = modelName;
+        if (Boolean.TRUE.equals(thinking)) {
+            actualModelName += "|thinking:enabled";
+            if (reasoningEffort != null && !reasoningEffort.isBlank()) {
+                actualModelName += "|effort:" + reasoningEffort;
+            }
         }
+
+        var optionsBuilder = org.springframework.ai.openai.OpenAiChatOptions.builder();
+        if (actualModelName != null && !actualModelName.isBlank()) {
+            optionsBuilder.withModel(actualModelName);
+        }
+        if (temperature != null) optionsBuilder.withTemperature(temperature.floatValue());
+        if (topP != null) optionsBuilder.withTopP(topP.floatValue());
+        if (maxTokens != null) optionsBuilder.withMaxTokens(maxTokens);
+        
+        promptSpec = promptSpec.options(optionsBuilder.build());
 
         return promptSpec
                 .stream()

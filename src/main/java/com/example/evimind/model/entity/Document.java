@@ -27,6 +27,8 @@ public class Document {
 
     private Long uploaderId;
 
+    private String summary;
+
     private String doi;
     private String authors;
     private Integer publicationYear;

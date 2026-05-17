@@ -26,12 +26,14 @@ public class KnowledgeBaseService {
 
     @Transactional
     public KnowledgeBase create(KnowledgeBase kb) {
+        if (kb.getId() != null && kb.getId() <= 0) kb.setId(null);
         if (kb.getEvidenceThreshold() == null) kb.setEvidenceThreshold(new BigDecimal("0.50"));
         if (kb.getChunkStrategy() == null) kb.setChunkStrategy("PARAGRAPH");
         if (kb.getChunkSize() == null) kb.setChunkSize(500);
         if (kb.getChunkOverlap() == null) kb.setChunkOverlap(100);
         kb.setStatus("ACTIVE");
         kb.setCreatorId(GroupContext.getUserId());
+        kb.setGroupId(GroupContext.getGroupId());
         knowledgeBaseMapper.insert(kb);
 
         KbMember member = new KbMember();

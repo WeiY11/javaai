@@ -1,6 +1,7 @@
 com\example\evimind\extractor\ExcelFileExtractor.class
 com\example\evimind\extractor\metadata\PaperMetadata.class
 com\example\evimind\model\dto\StreamEvent$TokenEvent.class
+com\example\evimind\service\DocumentChunkEmbeddingService.class
 com\example\evimind\service\CitationService.class
 com\example\evimind\EvimindApplication.class
 com\example\evimind\config\AiDataTools$ReadFileRequest.class
@@ -45,6 +46,7 @@ com\example\evimind\config\MinioConfig.class
 com\example\evimind\knowledgebase\KnowledgeBaseController.class
 com\example\evimind\mapper\DocumentMapper.class
 com\example\evimind\service\ChatService.class
+com\example\evimind\identity\GroupService.class
 com\example\evimind\model\entity\RefreshToken.class
 com\example\evimind\identity\GroupContext.class
 com\example\evimind\model\BatchProgress.class
@@ -52,13 +54,12 @@ com\example\evimind\config\EmbeddingProperties.class
 com\example\evimind\config\MyBatisMetaObjectHandler.class
 com\example\evimind\service\ConversationExportService.class
 com\example\evimind\mapper\GroupMapper.class
-com\example\evimind\qa\RagPipeline.class
 com\example\evimind\model\entity\Group.class
 com\example\evimind\document\DocumentController.class
 com\example\evimind\qa\RagResponse$EvidenceStatus.class
 com\example\evimind\service\BatchProgressService.class
 com\example\evimind\mapper\ConversationMapper.class
-com\example\evimind\config\AiConfig.class
+com\example\evimind\config\AiConfig$1$1.class
 com\example\evimind\extractor\ExcelFileExtractor$1.class
 com\example\evimind\controller\CitationController.class
 com\example\evimind\model\dto\LoginRequest.class
@@ -75,6 +76,7 @@ com\example\evimind\ingestion\DocumentChunker$ChunkConfig.class
 com\example\evimind\retrieval\ElasticsearchSearchService.class
 com\example\evimind\service\AnalysisResultService.class
 com\example\evimind\knowledgebase\KnowledgeBaseService.class
+com\example\evimind\service\DocumentChunkService.class
 com\example\evimind\ingestion\EtlPipeline.class
 com\example\evimind\storage\MinioStorageService.class
 com\example\evimind\config\AsyncConfig.class
@@ -91,6 +93,7 @@ com\example\evimind\model\AnalysisResult.class
 com\example\evimind\model\dto\AuthResponse.class
 com\example\evimind\controller\FileController.class
 com\example\evimind\mapper\DocumentChunkEmbeddingMapper.class
+com\example\evimind\config\AiConfig$1.class
 com\example\evimind\auth\AuthService.class
 com\example\evimind\model\entity\Conversation.class
 com\example\evimind\retrieval\HybridSearchService.class
@@ -99,7 +102,6 @@ com\example\evimind\mapper\DocumentChunkEmbeddingMapper$ChunkSimilarityResult.cl
 com\example\evimind\model\entity\KbMember.class
 com\example\evimind\extractor\PdfFileExtractor.class
 com\example\evimind\model\dto\RegisterRequest.class
-com\example\evimind\assistant\ConversationService.class
 com\example\evimind\model\entity\KnowledgeBase.class
 com\example\evimind\auth\TokenProvider.class
 com\example\evimind\model\dto\ApiResponse.class

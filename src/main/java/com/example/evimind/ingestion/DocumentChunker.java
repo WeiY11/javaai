@@ -90,7 +90,7 @@ public class DocumentChunker {
 
     private List<String> chunkByParagraph(String text, ChunkConfig config) {
         List<String> chunks = new ArrayList<>();
-        String[] paragraphs = text.split("\n\n+");
+        String[] paragraphs = text.split("\\n\\s*\\n");
         StringBuilder currentChunk = new StringBuilder();
 
         for (String paragraph : paragraphs) {
@@ -121,11 +121,43 @@ public class DocumentChunker {
 
     private String getOverlapText(String text, int overlapSize) {
         if (text.length() <= overlapSize) return text;
-        int start = text.length() - overlapSize;
-        int sentenceBreak = text.lastIndexOf('.', start);
-        if (sentenceBreak > start - overlapSize / 2) {
-            return text.substring(sentenceBreak + 1).trim();
+        int targetStart = text.length() - overlapSize;
+        
+        int breakBefore = -1;
+        for (int i = targetStart; i >= 0; i--) {
+            char c = text.charAt(i);
+            if (c == '.' || c == '。' || c == '!' || c == '！' || c == '?' || c == '？' || c == '\n') {
+                breakBefore = i;
+                break;
+            }
         }
-        return text.substring(start);
+        
+        int breakAfter = -1;
+        for (int i = targetStart; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '.' || c == '。' || c == '!' || c == '！' || c == '?' || c == '？' || c == '\n') {
+                breakAfter = i;
+                break;
+            }
+        }
+        
+        int bestStart = targetStart;
+        if (breakBefore != -1 && breakAfter != -1) {
+            if ((targetStart - breakBefore) <= (breakAfter - targetStart)) {
+                bestStart = breakBefore + 1;
+            } else {
+                bestStart = breakAfter + 1;
+            }
+        } else if (breakBefore != -1) {
+            bestStart = breakBefore + 1;
+        } else if (breakAfter != -1) {
+            bestStart = breakAfter + 1;
+        }
+        
+        if (text.length() - bestStart < Math.max(10, overlapSize * 0.2)) {
+            bestStart = targetStart;
+        }
+        
+        return text.substring(bestStart).trim();
     }
 }

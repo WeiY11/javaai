@@ -33,7 +33,7 @@ public class AiConfig {
     }
 
     @Bean
-    public Map<String, ChatClient> chatClients() {
+    public Map<String, ChatClient> chatClients(org.springframework.web.client.RestClient.Builder restClientBuilder) {
         Map<String, ChatClient> clients = new HashMap<>();
 
         if (aiProperties.getProviders() != null) {
@@ -42,7 +42,76 @@ public class AiConfig {
                 AiProperties.ProviderConfig config = entry.getValue();
 
                 try {
-                    OpenAiApi openAiApi = new OpenAiApi(config.getBaseUrl(), config.getApiKey());
+                    org.springframework.web.client.RestClient.Builder rcBuilder = restClientBuilder.clone();
+                    org.springframework.web.reactive.function.client.WebClient.Builder wcBuilder = org.springframework.web.reactive.function.client.WebClient.builder();
+
+                    if ("deepseek".equalsIgnoreCase(providerName)) {
+                        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                        mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                        mapper.registerModule(new com.fasterxml.jackson.databind.module.SimpleModule().setSerializerModifier(
+                                new com.fasterxml.jackson.databind.ser.BeanSerializerModifier() {
+                                    @Override
+                                    public com.fasterxml.jackson.databind.JsonSerializer<?> modifySerializer(
+                                            com.fasterxml.jackson.databind.SerializationConfig config,
+                                            com.fasterxml.jackson.databind.BeanDescription beanDesc,
+                                            com.fasterxml.jackson.databind.JsonSerializer<?> serializer) {
+                                        
+                                        if (beanDesc.getBeanClass().getName().contains("ChatCompletionRequest")) {
+                                            return new com.fasterxml.jackson.databind.JsonSerializer<Object>() {
+                                                @SuppressWarnings("unchecked")
+                                                @Override
+                                                public void serialize(Object value, com.fasterxml.jackson.core.JsonGenerator gen,
+                                                                      com.fasterxml.jackson.databind.SerializerProvider serializers) throws java.io.IOException {
+                                                    com.fasterxml.jackson.databind.util.TokenBuffer tb = new com.fasterxml.jackson.databind.util.TokenBuffer(mapper, false);
+                                                    ((com.fasterxml.jackson.databind.JsonSerializer<Object>) serializer).serialize(value, tb, serializers);
+                                                    
+                                                    com.fasterxml.jackson.databind.JsonNode rootNode = mapper.readTree(tb.asParser());
+                                                    if (rootNode.isObject() && rootNode.has("model")) {
+                                                        String modelStr = rootNode.get("model").asText();
+                                                        if (modelStr != null && modelStr.contains("|thinking:enabled")) {
+                                                            com.fasterxml.jackson.databind.node.ObjectNode objectNode = (com.fasterxml.jackson.databind.node.ObjectNode) rootNode;
+                                                            String[] parts = modelStr.split("\\|");
+                                                            String actualModel = parts[0];
+                                                            String effort = null;
+                                                            for (String part : parts) {
+                                                                if (part.startsWith("effort:")) {
+                                                                    effort = part.substring("effort:".length());
+                                                                }
+                                                            }
+                                                            objectNode.put("model", actualModel);
+                                                            com.fasterxml.jackson.databind.node.ObjectNode thinkingNode = mapper.createObjectNode();
+                                                            thinkingNode.put("type", "enabled");
+                                                            objectNode.set("thinking", thinkingNode);
+                                                            if (effort != null && !effort.isBlank()) {
+                                                                objectNode.put("reasoning_effort", effort);
+                                                            }
+                                                        }
+                                                    }
+                                                    gen.writeTree(rootNode);
+                                                }
+                                            };
+                                        }
+                                        return serializer;
+                                    }
+                                }
+                        ));
+
+                        org.springframework.http.converter.json.MappingJackson2HttpMessageConverter converter = 
+                                new org.springframework.http.converter.json.MappingJackson2HttpMessageConverter(mapper);
+                        rcBuilder.messageConverters(converters -> {
+                            converters.removeIf(c -> c instanceof org.springframework.http.converter.json.MappingJackson2HttpMessageConverter);
+                            converters.add(converter);
+                        });
+
+                        wcBuilder.exchangeStrategies(org.springframework.web.reactive.function.client.ExchangeStrategies.builder()
+                                .codecs(configurer -> {
+                                    configurer.defaultCodecs().jackson2JsonEncoder(new org.springframework.http.codec.json.Jackson2JsonEncoder(mapper));
+                                    configurer.defaultCodecs().jackson2JsonDecoder(new org.springframework.http.codec.json.Jackson2JsonDecoder(mapper));
+                                })
+                                .build());
+                    }
+                    
+                    OpenAiApi openAiApi = new OpenAiApi(config.getBaseUrl(), config.getApiKey(), rcBuilder, wcBuilder);
 
                     OpenAiChatOptions options = OpenAiChatOptions.builder()
                             .withModel(config.getModel())

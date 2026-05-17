@@ -99,8 +99,8 @@ CREATE TABLE IF NOT EXISTS message (
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS analysis_report (
-    id              BIGSERIAL       PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS analysis_result (
+    id              VARCHAR(256)    PRIMARY KEY,
     file_path       VARCHAR(512)    NOT NULL,
     file_name       VARCHAR(256)    NOT NULL,
     provider        VARCHAR(32),
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS analysis_report (
     content         TEXT,
     file_size       BIGINT,
     file_category   VARCHAR(32),
-    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+    analyzed_at     TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS refresh_token (

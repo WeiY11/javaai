@@ -1,3 +1,5 @@
-D:\javaai\src\test\java\com\example\evimind\ingestion\EtlPipelineTest.java
-D:\javaai\src\test\java\com\example\evimind\qa\RagPipelineTest.java
-D:\javaai\src\test\java\com\example\evimind\retrieval\RrfFusionServiceTest.java
+D:\EviMind\src\test\java\com\example\evimind\CheckOptions.java
+D:\EviMind\src\test\java\com\example\evimind\ingestion\EtlPipelineTest.java
+D:\EviMind\src\test\java\com\example\evimind\OptionsTest.java
+D:\EviMind\src\test\java\com\example\evimind\qa\RagPipelineTest.java
+D:\EviMind\src\test\java\com\example\evimind\retrieval\RrfFusionServiceTest.java

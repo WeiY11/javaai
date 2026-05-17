@@ -1,12 +1,19 @@
 import type { Conversation, ChatMessage, Citation } from '../types/chat.types'
-import { get, post, put, del } from '../utils/request'
+import { get, post, put, del, rootGet } from '../utils/request'
 
 export async function listConversations(): Promise<Conversation[]> {
   return get('/conversations')
 }
 
+export async function getModels(): Promise<any[]> {
+  return rootGet('/models')
+}
+
 export async function createConversation(knowledgeBaseId?: number, modelProvider = 'deepseek'): Promise<Conversation> {
-  return post('/conversations', { knowledgeBaseId, modelProvider })
+  const params = new URLSearchParams()
+  if (knowledgeBaseId) params.append('knowledgeBaseId', knowledgeBaseId.toString())
+  if (modelProvider) params.append('modelProvider', modelProvider)
+  return post(`/conversations?${params.toString()}`)
 }
 
 export async function getMessages(conversationId: number): Promise<ChatMessage[]> {
@@ -14,7 +21,10 @@ export async function getMessages(conversationId: number): Promise<ChatMessage[]
 }
 
 export async function addMessage(conversationId: number, role: string, content: string): Promise<ChatMessage> {
-  return post(`/conversations/${conversationId}/messages`, { role, content })
+  const params = new URLSearchParams()
+  params.append('role', role)
+  params.append('content', content)
+  return post(`/conversations/${conversationId}/messages?${params.toString()}`)
 }
 
 export async function deleteConversation(conversationId: number): Promise<void> {

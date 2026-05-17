@@ -20,10 +20,13 @@ public class EmbeddingService {
     private EmbeddingModel embeddingModel;
 
     @Autowired
-    private DocumentChunkMapper documentChunkMapper;
+    private com.example.evimind.service.DocumentChunkService documentChunkService;
 
     @Autowired
-    private DocumentChunkEmbeddingMapper embeddingMapper;
+    private com.example.evimind.service.DocumentChunkEmbeddingService documentChunkEmbeddingService;
+
+    @Autowired
+    private com.example.evimind.mapper.DocumentChunkEmbeddingMapper embeddingMapper;
 
     public void embedAndStore(List<DocumentChunk> chunks) {
         if (embeddingModel == null) {
@@ -32,35 +35,49 @@ public class EmbeddingService {
         }
         if (chunks.isEmpty()) return;
 
-        List<String> texts = chunks.stream()
-                .map(DocumentChunk::getContent)
-                .collect(Collectors.toList());
+        final int BATCH_SIZE = 100;
+        List<DocumentChunkEmbedding> allEmbeddings = new java.util.ArrayList<>();
+        
+        for (int i = 0; i < chunks.size(); i += BATCH_SIZE) {
+            int end = Math.min(i + BATCH_SIZE, chunks.size());
+            List<DocumentChunk> batchChunks = chunks.subList(i, end);
+            
+            List<String> texts = batchChunks.stream()
+                    .map(DocumentChunk::getContent)
+                    .collect(Collectors.toList());
 
-        List<List<Double>> vectors;
-        try {
-            vectors = embeddingModel.embed(texts);
-        } catch (Exception e) {
-            log.error("Embedding API call failed", e);
-            throw new RuntimeException("Embedding generation failed", e);
+            List<List<Double>> vectors;
+            try {
+                vectors = embeddingModel.embed(texts);
+            } catch (Exception e) {
+                log.error("Embedding API call failed for batch {}-{}", i, end, e);
+                throw new RuntimeException("Embedding generation failed", e);
+            }
+
+            for (int j = 0; j < batchChunks.size(); j++) {
+                DocumentChunk chunk = batchChunks.get(j);
+                List<Double> vector = vectors.get(j);
+
+                String vectorStr = formatPgVector(vector);
+
+                DocumentChunkEmbedding emb = new DocumentChunkEmbedding();
+                emb.setChunkId(chunk.getId());
+                emb.setKnowledgeBaseId(chunk.getKnowledgeBaseId());
+                emb.setEmbedding(vectorStr);
+                allEmbeddings.add(emb);
+            }
         }
 
+        // Batch insert embeddings
+        documentChunkEmbeddingService.saveBatch(allEmbeddings, 100);
+
+        // Update chunks with vector IDs
         for (int i = 0; i < chunks.size(); i++) {
-            DocumentChunk chunk = chunks.get(i);
-            List<Double> vector = vectors.get(i);
-
-            String vectorStr = formatPgVector(vector);
-
-            DocumentChunkEmbedding emb = new DocumentChunkEmbedding();
-            emb.setChunkId(chunk.getId());
-            emb.setKnowledgeBaseId(chunk.getKnowledgeBaseId());
-            emb.setEmbedding(vectorStr);
-            embeddingMapper.insert(emb);
-
-            chunk.setVectorId("emb_" + emb.getId());
-            documentChunkMapper.updateById(chunk);
+            chunks.get(i).setVectorId("emb_" + allEmbeddings.get(i).getId());
         }
+        documentChunkService.updateBatchById(chunks, 100);
 
-        log.info("Embedded and stored {} chunks", chunks.size());
+        log.info("Embedded and stored {} chunks in batches", chunks.size());
     }
 
     public void deleteByDocumentId(Long documentId) {

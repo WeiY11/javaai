@@ -87,7 +87,7 @@ public class DocumentService {
         return doc;
     }
 
-    @Async
+    @Async("analysisTaskExecutor")
     public void triggerIngestionAsync(Long documentId) {
         try {
             etlPipeline.processDocument(documentId);

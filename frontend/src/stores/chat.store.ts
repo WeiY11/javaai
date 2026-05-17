@@ -7,6 +7,9 @@ export interface ModelParams {
   temperature?: number
   topP?: number
   maxTokens?: number
+  modelName?: string
+  thinking?: boolean
+  reasoningEffort?: string
 }
 
 export const useChatStore = defineStore('chat', () => {

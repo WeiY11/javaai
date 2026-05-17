@@ -31,12 +31,38 @@
           <el-form label-position="top" size="small">
             <el-form-item label="模型供应商">
               <el-select v-model="modelProvider">
-                <el-option label="DeepSeek" value="deepseek" />
-                <el-option label="智谱 GLM-4" value="zhipu" />
-                <el-option label="通义千问" value="qianwen" />
-                <el-option label="OpenAI" value="openai" />
+                <el-option 
+                  v-for="model in availableModels" 
+                  :key="model.provider" 
+                  :label="model.provider + ' (' + model.model + ')'" 
+                  :value="model.provider" 
+                />
               </el-select>
             </el-form-item>
+            
+            <template v-if="modelProvider.toLowerCase() === 'deepseek'">
+              <el-form-item label="模型版本">
+                <el-select v-model="modelName" placeholder="请选择模型版本">
+                  <el-option label="deepseek-chat (V3)" value="deepseek-chat" />
+                  <el-option label="deepseek-reasoner (R1)" value="deepseek-reasoner" />
+                  <el-option label="deepseek-v4-pro" value="deepseek-v4-pro" />
+                  <el-option label="deepseek-v4-flash" value="deepseek-v4-flash" />
+                </el-select>
+              </el-form-item>
+              
+              <el-form-item label="启用思维链 (Thinking)">
+                <el-switch v-model="thinking" />
+              </el-form-item>
+              
+              <el-form-item v-if="thinking && modelName?.includes('pro')" label="推理强度 (Reasoning Effort)">
+                <el-select v-model="reasoningEffort" placeholder="选择推理强度">
+                  <el-option label="Low" value="low" />
+                  <el-option label="Medium" value="medium" />
+                  <el-option label="High" value="high" />
+                </el-select>
+              </el-form-item>
+            </template>
+            
             <el-form-item label="Temperature">
               <el-slider v-model="temperature" :min="0" :max="2" :step="0.1" show-input />
             </el-form-item>
@@ -47,6 +73,14 @@
               <el-input-number v-model="maxTokens" :min="64" :max="8192" :step="64" />
             </el-form-item>
           </el-form>
+        </el-collapse-item>
+        <el-collapse-item title="系统已接入接口" name="api">
+          <div v-if="availableModels.length === 0" class="text-muted text-sm">正在加载接口信息...</div>
+          <div v-for="model in availableModels" :key="model.provider" class="api-card">
+            <strong>{{ model.provider }}</strong> ({{ model.model }})
+            <div class="api-detail"><span>URL:</span> {{ model.baseUrl || '默认' }}</div>
+            <div class="api-detail"><span>KEY:</span> {{ model.apiKey }}</div>
+          </div>
         </el-collapse-item>
       </el-collapse>
     </aside>
@@ -140,10 +174,11 @@ import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { useChatStore } from '../stores/chat.store'
 import { useKnowledgeBaseStore } from '../stores/knowledge-base.store'
-import { renameConversation } from '../api/chat'
+import { renameConversation, getModels } from '../api/chat'
 
 const chatStore = useChatStore()
 const kbStore = useKnowledgeBaseStore()
+const availableModels = ref<any[]>([])
 const inputText = ref('')
 const modelProvider = ref('deepseek')
 const messagesRef = ref<HTMLElement>()
@@ -153,6 +188,9 @@ const renameTitle = ref('')
 const temperature = ref(0.7)
 const topP = ref(1)
 const maxTokens = ref(2048)
+const modelName = ref('deepseek-v4-pro')
+const thinking = ref(true)
+const reasoningEffort = ref('medium')
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
 
@@ -197,7 +235,10 @@ async function handleSend() {
     await chatStore.sendMessage(text, {
       temperature: temperature.value,
       topP: topP.value,
-      maxTokens: maxTokens.value
+      maxTokens: maxTokens.value,
+      modelName: modelProvider.value.toLowerCase() === 'deepseek' && modelName.value ? modelName.value : undefined,
+      thinking: modelProvider.value.toLowerCase() === 'deepseek' ? thinking.value : undefined,
+      reasoningEffort: modelProvider.value.toLowerCase() === 'deepseek' && thinking.value ? reasoningEffort.value : undefined
     })
   } catch (e: any) {
     ElMessage.error(e.message || '发送失败')
@@ -222,9 +263,20 @@ async function finishRename() {
   renaming.value = false
 }
 
-onMounted(() => {
+onMounted(async () => {
   chatStore.loadConversations()
   kbStore.loadKnowledgeBases()
+  try {
+    const res = await getModels()
+    // The API might wrap it in ApiResponse or just return data depending on the interceptor.
+    // In request.ts, the interceptor usually returns response.data.data
+    availableModels.value = res || []
+    if (availableModels.value.length > 0 && !availableModels.value.find(m => m.provider === modelProvider.value)) {
+      modelProvider.value = availableModels.value[0].provider
+    }
+  } catch (e) {
+    console.error('Failed to load models', e)
+  }
 })
 </script>
 
@@ -293,6 +345,30 @@ onMounted(() => {
 
 .conversation-item small {
   color: var(--text-muted);
+}
+
+.api-card {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.api-card:last-child {
+  margin-bottom: 0;
+}
+
+.api-detail {
+  margin-top: 4px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.api-detail span {
+  color: var(--text);
+  font-weight: 600;
+  margin-right: 4px;
 }
 
 .model-collapse {

@@ -36,10 +36,11 @@
             inline-prompt
             active-text="暗"
             inactive-text="亮"
+            style="--el-switch-on-color: var(--surface-muted); --el-switch-off-color: var(--surface-muted); border: 1px solid var(--border);"
             @change="toggleDark"
           />
-          <el-tag effect="plain" type="info">{{ authStore.user?.username || '当前用户' }}</el-tag>
-          <el-button @click="logout">退出</el-button>
+          <el-tag effect="plain" type="info" round class="user-tag">{{ authStore.user?.username || '当前用户' }}</el-tag>
+          <el-button @click="logout" text>退出登录</el-button>
         </div>
       </header>
 

@@ -13,9 +13,11 @@ import reactor.core.publisher.Flux;
 public class ChatController {
 
     private final ChatService chatService;
+    private final com.example.evimind.config.AiProperties aiProperties;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, com.example.evimind.config.AiProperties aiProperties) {
         this.chatService = chatService;
+        this.aiProperties = aiProperties;
     }
 
     /**
@@ -29,5 +31,26 @@ public class ChatController {
             @RequestParam(value = "sessionId", defaultValue = "default-session") String sessionId) {
         
         return chatService.streamChat(provider, message, sessionId);
+    }
+
+    @Operation(summary = "获取大模型列表", description = "返回系统已配置的所有 AI 接入接口")
+    @GetMapping("/models")
+    public com.example.evimind.model.dto.ApiResponse<java.util.List<java.util.Map<String, Object>>> getAvailableModels() {
+        java.util.List<java.util.Map<String, Object>> models = new java.util.ArrayList<>();
+        if (aiProperties.getProviders() != null) {
+            aiProperties.getProviders().forEach((name, config) -> {
+                java.util.Map<String, Object> modelInfo = new java.util.HashMap<>();
+                modelInfo.put("provider", name);
+                modelInfo.put("model", config.getModel());
+                modelInfo.put("baseUrl", config.getBaseUrl());
+                // Return masked API key for security but to show it's configured
+                String maskedKey = config.getApiKey() != null && config.getApiKey().length() > 8
+                        ? config.getApiKey().substring(0, 4) + "..." + config.getApiKey().substring(config.getApiKey().length() - 4)
+                        : "***";
+                modelInfo.put("apiKey", maskedKey);
+                models.add(modelInfo);
+            });
+        }
+        return com.example.evimind.model.dto.ApiResponse.success(models);
     }
 }

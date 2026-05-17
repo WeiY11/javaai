@@ -74,11 +74,12 @@ public class ConversationService {
     }
 
     public Flux<String> streamMessage(Long conversationId, String content) {
-        return streamMessage(conversationId, content, null, null, null);
+        return streamMessage(conversationId, content, null, null, null, null, null, null);
     }
 
     public Flux<String> streamMessage(Long conversationId, String content,
-                                       Double temperature, Double topP, Integer maxTokens) {
+                                       Double temperature, Double topP, Integer maxTokens,
+                                       String modelName, Boolean thinking, String reasoningEffort) {
         Conversation conv = requireConversationOwner(conversationId);
 
         if (conv.getKnowledgeBaseId() == null) {
@@ -101,7 +102,7 @@ public class ConversationService {
         String[] citationsHolder = new String[1];
 
         return ragPipeline.streamQuery(content, conv.getKnowledgeBaseId(), modelProvider,
-                temperature, topP, maxTokens)
+                temperature, topP, maxTokens, modelName, thinking, reasoningEffort)
                 .map(event -> {
                     try {
                         @SuppressWarnings("unchecked")

@@ -48,6 +48,12 @@ public class EtlPipeline {
     @Autowired(required = false)
     private AcademicPdfMetadataExtractor academicMetadataExtractor;
 
+    @Autowired
+    private com.example.evimind.service.DocumentChunkService documentChunkService;
+    
+    @Autowired
+    private java.util.Map<String, org.springframework.ai.chat.client.ChatClient> chatClients;
+
     @Transactional
     public void processDocument(Long documentId) {
         Document doc = documentMapper.selectById(documentId);
@@ -79,6 +85,26 @@ public class EtlPipeline {
             updateStatus(doc, "CLEANING");
             String cleanedText = textCleaner.clean(rawText);
             log.info("Cleaned to {} chars from document {}", cleanedText.length(), documentId);
+            
+            // --- NEW: Generate Document Summary ---
+            try {
+                org.springframework.ai.chat.client.ChatClient chatClient = chatClients.getOrDefault("deepseek", chatClients.values().stream().findFirst().orElse(null));
+                if (chatClient != null && cleanedText.length() > 50) {
+                    String contextText = cleanedText.substring(0, Math.min(3000, cleanedText.length()));
+                    String summary = chatClient.prompt()
+                            .system("你是一个专业的文档分析助手。请根据提供的文档开头内容，提取并凝练出一份简洁的文档简介（控制在 200 字以内）。如果提供的文本看起来全是乱码或无有效内容，请回复：暂无有效摘要。")
+                            .user(contextText)
+                            .call()
+                            .content();
+                    if (summary != null && !summary.isBlank()) {
+                        doc.setSummary(summary.trim());
+                        documentMapper.updateById(doc);
+                        log.info("Generated summary for document {}: {}", documentId, summary.length() > 50 ? summary.substring(0, 50) + "..." : summary);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to generate summary for document {}: {}", documentId, e.getMessage());
+            }
 
             updateStatus(doc, "CHUNKING");
             KnowledgeBase kb = knowledgeBaseMapper.selectById(doc.getKnowledgeBaseId());
@@ -140,9 +166,9 @@ public class EtlPipeline {
             chunk.setKnowledgeBaseId(doc.getKnowledgeBaseId());
             chunk.setContent(chunks.get(i));
             chunk.setChunkIndex(i);
-            documentChunkMapper.insert(chunk);
             saved.add(chunk);
         }
+        documentChunkService.saveBatch(saved, 100);
         return saved;
     }
 
@@ -164,6 +190,12 @@ public class EtlPipeline {
         elasticsearchIndexService.deleteByDocumentId(documentId);
         if (minioStorageService != null) {
             minioStorageService.deleteFile(doc.getStoragePath());
+        } else if (localFileStorageService != null) {
+            try {
+                localFileStorageService.deleteFile(doc.getStoragePath());
+            } catch (Exception e) {
+                log.warn("Failed to delete local file: {}", doc.getStoragePath(), e);
+            }
         }
         documentMapper.deleteById(documentId);
         log.info("Deleted document {} and all associated data", documentId);

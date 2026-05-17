@@ -1,6 +1,7 @@
 package com.example.evimind.auth;
 
 import com.example.evimind.identity.GroupContext;
+import com.example.evimind.identity.GroupService;
 import com.example.evimind.model.dto.ApiResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -24,6 +25,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final TokenProvider tokenProvider;
+    private final GroupService groupService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -34,7 +36,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Long userId = tokenProvider.getUserIdFromToken(token);
                 String username = tokenProvider.getUsernameFromToken(token);
                 String systemRole = tokenProvider.getSystemRoleFromToken(token);
-                GroupContext.set(userId, null, systemRole);
+                Long groupId = groupService.getOrCreateDefaultGroupId(userId, username);
+                GroupContext.set(userId, groupId, systemRole);
 
                 List<SimpleGrantedAuthority> authorities = List.of(
                         new SimpleGrantedAuthority("ROLE_" + systemRole)
