@@ -1,5 +1,6 @@
 com\example\evimind\assistant\AgentToolsTest.class
 com\example\evimind\retrieval\RrfFusionServiceTest.class
+com\example\evimind\qa\EvidencePortfolioSelectorTest.class
 com\example\evimind\qa\RagPipelineTest.class
 com\example\evimind\ingestion\EtlPipelineTest.class
 com\example\evimind\retrieval\HybridSearchServiceTest.class

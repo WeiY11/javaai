@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,10 +23,11 @@ public class ElasticsearchSearchService {
     }
 
     private static final String INDEX_NAME = "document_chunk";
+    private volatile boolean esUnavailableLogged = false;
 
     public List<SearchResult> search(String query, Long knowledgeBaseId, int topK) {
         if (elasticsearchClient == null) {
-            log.warn("ElasticsearchClient not available, returning empty results");
+            log.debug("ElasticsearchClient not available, returning empty results");
             return List.of();
         }
         try {
@@ -52,6 +53,7 @@ public class ElasticsearchSearchService {
                     Map.class
             );
 
+            esUnavailableLogged = false; // 连接恢复时重置
             List<SearchResult> results = new ArrayList<>();
             for (Hit<Map> hit : response.hits().hits()) {
                 Map source = hit.source();
@@ -69,8 +71,13 @@ public class ElasticsearchSearchService {
             }
             log.debug("Elasticsearch search returned {} results for KB {}", results.size(), knowledgeBaseId);
             return results;
-        } catch (IOException e) {
-            log.error("Elasticsearch search failed", e);
+        } catch (Exception e) {
+            if (!esUnavailableLogged) {
+                log.warn("Elasticsearch unavailable, full-text search disabled ({}). Subsequent failures will be suppressed.", e.getMessage());
+                esUnavailableLogged = true;
+            } else {
+                log.debug("Elasticsearch search failed: {}", e.getMessage());
+            }
             return List.of();
         }
     }

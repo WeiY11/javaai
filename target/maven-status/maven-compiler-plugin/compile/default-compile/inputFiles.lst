@@ -23,6 +23,7 @@ D:\EviMind\src\main\java\com\example\evimind\config\MyBatisMetaObjectHandler.jav
 D:\EviMind\src\main\java\com\example\evimind\config\MyBatisPlusConfig.java
 D:\EviMind\src\main\java\com\example\evimind\config\PromptTemplateManager.java
 D:\EviMind\src\main\java\com\example\evimind\config\SecurityConfig.java
+D:\EviMind\src\main\java\com\example\evimind\config\SpaForwardController.java
 D:\EviMind\src\main\java\com\example\evimind\controller\AnalysisController.java
 D:\EviMind\src\main\java\com\example\evimind\controller\ChatController.java
 D:\EviMind\src\main\java\com\example\evimind\controller\CitationController.java
@@ -84,6 +85,7 @@ D:\EviMind\src\main\java\com\example\evimind\model\entity\Message.java
 D:\EviMind\src\main\java\com\example\evimind\model\entity\RefreshToken.java
 D:\EviMind\src\main\java\com\example\evimind\model\entity\ResearchNote.java
 D:\EviMind\src\main\java\com\example\evimind\model\entity\User.java
+D:\EviMind\src\main\java\com\example\evimind\qa\EvidencePortfolioSelector.java
 D:\EviMind\src\main\java\com\example\evimind\qa\RagPipeline.java
 D:\EviMind\src\main\java\com\example\evimind\qa\RagResponse.java
 D:\EviMind\src\main\java\com\example\evimind\repository\AnalysisResultRepository.java

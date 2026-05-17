@@ -21,7 +21,7 @@ public class PgVectorSearchService {
 
     public List<SearchResult> search(String query, Long knowledgeBaseId, int topK) {
         if (embeddingModel == null) {
-            log.warn("EmbeddingModel not available, returning empty results");
+            log.debug("EmbeddingModel not available, returning empty results");
             return List.of();
         }
         try {

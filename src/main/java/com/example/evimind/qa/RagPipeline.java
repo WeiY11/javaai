@@ -42,6 +42,8 @@ public class RagPipeline {
     @Value("${custom.rag.max-evidence-context-chars:6000}")
     private int maxEvidenceContextChars = 6000;
 
+    private final EvidencePortfolioSelector evidencePortfolioSelector = new EvidencePortfolioSelector();
+
     public RagResponse query(String userQuery, Long knowledgeBaseId) {
         requireKbMember(knowledgeBaseId);
 
@@ -149,7 +151,7 @@ public class RagPipeline {
 
     private String renderEvidencePrompt(String userQuery, List<SearchResult> results) {
         Map<String, Object> vars = new HashMap<>();
-        vars.put("evidence", buildBudgetedEvidenceContext(results));
+        vars.put("evidence", buildBudgetedEvidenceContext(userQuery, results));
         vars.put("query", userQuery);
         return promptTemplateManager.render("evidence-sufficient-prompt", vars);
     }
@@ -255,11 +257,12 @@ public class RagPipeline {
         return citations;
     }
 
-    private String buildBudgetedEvidenceContext(List<SearchResult> results) {
+    private String buildBudgetedEvidenceContext(String userQuery, List<SearchResult> results) {
         StringBuilder sb = new StringBuilder();
         int budget = Math.max(400, maxEvidenceContextChars);
-        for (int i = 0; i < results.size(); i++) {
-            String block = evidenceBlock(i, results.get(i));
+        List<SearchResult> portfolio = evidencePortfolioSelector.select(userQuery, results, budget);
+        for (int i = 0; i < portfolio.size(); i++) {
+            String block = evidenceBlock(i, portfolio.get(i));
             int remaining = budget - sb.length();
             if (remaining <= 0) break;
             if (block.length() <= remaining) {
