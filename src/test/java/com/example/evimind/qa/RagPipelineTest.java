@@ -14,8 +14,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -87,6 +89,62 @@ class RagPipelineTest {
 
         assertEquals(RagResponse.EvidenceStatus.INSUFFICIENT, response.getEvidenceStatus());
         verify(chatClients, never()).get(anyString());
+    }
+
+    @Test
+    void shouldTreatStrongTopEvidenceAsSufficientDespiteWeakTail() {
+        KnowledgeBase kb = new KnowledgeBase();
+        kb.setId(1L);
+        kb.setEvidenceThreshold(new BigDecimal("0.50"));
+
+        List<SearchResult> results = List.of(
+                new SearchResult("c1", 1L, 1L, "primary evidence", 0, 0.92, "rrf_fused"),
+                new SearchResult("c2", 1L, 1L, "supporting tail", 1, 0.20, "rrf_fused"),
+                new SearchResult("c3", 1L, 1L, "weak tail", 2, 0.10, "rrf_fused")
+        );
+
+        when(kbMemberMapper.selectCount(any())).thenReturn(1L);
+        when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
+        when(hybridSearchService.search(anyString(), eq(1L), eq(10))).thenReturn(results);
+        when(promptTemplateManager.render(eq("evidence-sufficient-prompt"), anyMap()))
+                .thenReturn("prompt");
+        when(chatClients.isEmpty()).thenReturn(true);
+
+        RagResponse response = ragPipeline.query("test query", 1L);
+
+        assertEquals(RagResponse.EvidenceStatus.SUFFICIENT, response.getEvidenceStatus());
+        assertEquals("AI model not available. Please configure an AI provider.", response.getAnswer());
+    }
+
+    @Test
+    void shouldLimitEvidenceContextBeforeCallingModel() {
+        ReflectionTestUtils.setField(ragPipeline, "maxEvidenceContextChars", 800);
+        KnowledgeBase kb = new KnowledgeBase();
+        kb.setId(1L);
+        kb.setEvidenceThreshold(new BigDecimal("0.50"));
+
+        String longContent = "evidence ".repeat(120);
+        List<SearchResult> results = List.of(
+                new SearchResult("c1", 1L, 1L, longContent + "first", 0, 0.95, "rrf_fused"),
+                new SearchResult("c2", 1L, 1L, longContent + "second", 1, 0.90, "rrf_fused"),
+                new SearchResult("c3", 1L, 1L, longContent + "third", 2, 0.85, "rrf_fused")
+        );
+
+        when(kbMemberMapper.selectCount(any())).thenReturn(1L);
+        when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
+        when(hybridSearchService.search(anyString(), eq(1L), eq(10))).thenReturn(results);
+        when(promptTemplateManager.render(eq("evidence-sufficient-prompt"), anyMap()))
+                .thenReturn("prompt");
+        when(chatClients.isEmpty()).thenReturn(true);
+
+        ragPipeline.query("test query", 1L);
+
+        ArgumentCaptor<Map<String, Object>> varsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(promptTemplateManager).render(eq("evidence-sufficient-prompt"), varsCaptor.capture());
+        String evidence = (String) varsCaptor.getValue().get("evidence");
+        assertTrue(evidence.length() <= 800);
+        assertTrue(evidence.contains("[来源1]"));
+        assertFalse(evidence.contains("third"));
     }
 
     @Test

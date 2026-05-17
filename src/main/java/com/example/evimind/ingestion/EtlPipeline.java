@@ -121,8 +121,7 @@ public class EtlPipeline {
             embeddingService.embedAndStore(savedChunks);
 
             updateStatus(doc, "INDEXING");
-            List<String> chunkContents = chunks;
-            elasticsearchIndexService.indexChunks(chunkContents, doc.getKnowledgeBaseId(), doc.getId());
+            elasticsearchIndexService.indexChunks(savedChunks, doc.getKnowledgeBaseId(), doc.getId());
 
             doc.setIngestionStatus("COMPLETED");
             doc.setChunkCount(chunks.size());

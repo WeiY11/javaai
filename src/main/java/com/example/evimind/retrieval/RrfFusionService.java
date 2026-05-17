@@ -21,14 +21,17 @@ public class RrfFusionService {
         List<SearchResult> normKeyword = normalizeScores(keywordResults);
 
         Map<String, RrfEntry> entryMap = new LinkedHashMap<>();
+        int activeSources = 0;
+        if (!normSemantic.isEmpty()) activeSources++;
+        if (!normKeyword.isEmpty()) activeSources++;
 
         List<SearchResult> sortedSemantic = normSemantic.stream()
                 .sorted(Comparator.comparingDouble(SearchResult::getScore).reversed())
                 .toList();
         for (int i = 0; i < sortedSemantic.size(); i++) {
             SearchResult r = sortedSemantic.get(i);
-            entryMap.computeIfAbsent(r.getChunkId(), id -> new RrfEntry(r))
-                    .addSemanticRank(i + 1, k);
+            entryMap.computeIfAbsent(fusionKey(r), id -> new RrfEntry(r))
+                    .addSemanticRank(i + 1, k, r.getScore());
         }
 
         List<SearchResult> sortedKeyword = normKeyword.stream()
@@ -36,11 +39,13 @@ public class RrfFusionService {
                 .toList();
         for (int i = 0; i < sortedKeyword.size(); i++) {
             SearchResult r = sortedKeyword.get(i);
-            entryMap.computeIfAbsent(r.getChunkId(), id -> new RrfEntry(r))
-                    .addKeywordRank(i + 1, k);
+            entryMap.computeIfAbsent(fusionKey(r), id -> new RrfEntry(r))
+                    .addKeywordRank(i + 1, k, r.getScore());
         }
 
+        double idealRrf = activeSources * (1.0 / (k + 1));
         List<SearchResult> fused = entryMap.values().stream()
+                .peek(entry -> entry.calculateConfidence(idealRrf))
                 .sorted(Comparator.comparingDouble(RrfEntry::getScore).reversed())
                 .limit(topN)
                 .map(entry -> {
@@ -53,6 +58,13 @@ public class RrfFusionService {
         log.debug("RRF fusion: {} semantic + {} keyword -> {} fused results",
                 semanticResults.size(), keywordResults.size(), fused.size());
         return fused;
+    }
+
+    private String fusionKey(SearchResult result) {
+        if (result.getDocumentId() != null) {
+            return result.getDocumentId() + "#" + result.getChunkIndex();
+        }
+        return result.getChunkId();
     }
 
     private List<SearchResult> normalizeScores(List<SearchResult> results) {
@@ -77,22 +89,43 @@ public class RrfFusionService {
 
     private static class RrfEntry {
         final SearchResult result;
+        double rrfScore = 0.0;
+        double normalizedScoreSum = 0.0;
+        int sourceHits = 0;
         double score = 0.0;
 
         RrfEntry(SearchResult result) {
             this.result = result;
         }
 
-        void addSemanticRank(int rank, int k) {
-            score += 1.0 / (k + rank);
+        void addSemanticRank(int rank, int k, double normalizedScore) {
+            addRank(rank, k, normalizedScore);
         }
 
-        void addKeywordRank(int rank, int k) {
-            score += 1.0 / (k + rank);
+        void addKeywordRank(int rank, int k, double normalizedScore) {
+            addRank(rank, k, normalizedScore);
+        }
+
+        private void addRank(int rank, int k, double normalizedScore) {
+            rrfScore += 1.0 / (k + rank);
+            normalizedScoreSum += clamp(normalizedScore);
+            sourceHits++;
+        }
+
+        void calculateConfidence(double idealRrf) {
+            double rankConfidence = idealRrf > 0.0 ? rrfScore / idealRrf : 0.0;
+            double sourceConfidence = sourceHits > 0 ? normalizedScoreSum / sourceHits : 0.0;
+            score = clamp(0.75 * rankConfidence + 0.25 * sourceConfidence);
         }
 
         double getScore() {
             return score;
+        }
+
+        private static double clamp(double value) {
+            if (value < 0.0) return 0.0;
+            if (value > 1.0) return 1.0;
+            return value;
         }
     }
 }

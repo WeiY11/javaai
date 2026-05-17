@@ -14,6 +14,7 @@ import com.example.evimind.retrieval.SearchResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
@@ -38,6 +39,9 @@ public class RagPipeline {
     @Autowired
     private Map<String, ChatClient> chatClients;
 
+    @Value("${custom.rag.max-evidence-context-chars:6000}")
+    private int maxEvidenceContextChars = 6000;
+
     public RagResponse query(String userQuery, Long knowledgeBaseId) {
         requireKbMember(knowledgeBaseId);
 
@@ -47,39 +51,23 @@ public class RagPipeline {
         }
 
         List<SearchResult> results = hybridSearchService.search(userQuery, knowledgeBaseId, 10);
-
         RagResponse response = new RagResponse();
 
         if (results.isEmpty()) {
             response.setEvidenceStatus(RagResponse.EvidenceStatus.NO_RESULTS);
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("query", userQuery);
-            response.setAnswer(promptTemplateManager.render("evidence-insufficient-prompt", vars));
+            response.setAnswer(renderInsufficientPrompt(userQuery));
             return response;
         }
 
-        double avgScore = results.stream()
-                .mapToDouble(SearchResult::getScore)
-                .average()
-                .orElse(0.0);
-        BigDecimal threshold = kb.getEvidenceThreshold();
-
-        if (threshold != null && avgScore < threshold.doubleValue()) {
+        if (!hasSufficientEvidence(results, kb.getEvidenceThreshold())) {
             response.setEvidenceStatus(RagResponse.EvidenceStatus.INSUFFICIENT);
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("query", userQuery);
-            response.setAnswer(promptTemplateManager.render("evidence-insufficient-prompt", vars));
+            response.setAnswer(renderInsufficientPrompt(userQuery));
             return response;
         }
 
         response.setEvidenceStatus(RagResponse.EvidenceStatus.SUFFICIENT);
 
-        String context = buildContext(results);
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("evidence", context);
-        vars.put("query", userQuery);
-        String prompt = promptTemplateManager.render("evidence-sufficient-prompt", vars);
-
+        String prompt = renderEvidencePrompt(userQuery, results);
         ChatClient chatClient = resolveChatClient();
         if (chatClient == null) {
             response.setAnswer("AI model not available. Please configure an AI provider.");
@@ -101,8 +89,8 @@ public class RagPipeline {
     }
 
     public Flux<String> streamQuery(String userQuery, Long knowledgeBaseId, String modelProvider,
-                                     Double temperature, Double topP, Integer maxTokens,
-                                     String modelName, Boolean thinking, String reasoningEffort) {
+                                    Double temperature, Double topP, Integer maxTokens,
+                                    String modelName, Boolean thinking, String reasoningEffort) {
         requireKbMember(knowledgeBaseId);
 
         KnowledgeBase kb = knowledgeBaseMapper.selectById(knowledgeBaseId);
@@ -118,64 +106,32 @@ public class RagPipeline {
             return Flux.just(StreamEvent.error("Search failed: " + e.getMessage()));
         }
 
-        if (results.isEmpty()) {
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("query", userQuery);
-            String refusal = promptTemplateManager.render("evidence-insufficient-prompt", vars);
+        if (results.isEmpty() || !hasSufficientEvidence(results, kb.getEvidenceThreshold())) {
             return Flux.just(
-                    StreamEvent.token(refusal),
+                    StreamEvent.token(renderInsufficientPrompt(userQuery)),
                     StreamEvent.done(null)
             );
         }
-
-        double avgScore = results.stream()
-                .mapToDouble(SearchResult::getScore)
-                .average()
-                .orElse(0.0);
-        BigDecimal threshold = kb.getEvidenceThreshold();
-
-        if (threshold != null && avgScore < threshold.doubleValue()) {
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("query", userQuery);
-            String refusal = promptTemplateManager.render("evidence-insufficient-prompt", vars);
-            return Flux.just(
-                    StreamEvent.token(refusal),
-                    StreamEvent.done(null)
-            );
-        }
-
-        String context = buildContext(results);
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("evidence", context);
-        vars.put("query", userQuery);
-        String prompt = promptTemplateManager.render("evidence-sufficient-prompt", vars);
 
         ChatClient chatClient = resolveChatClient(modelProvider);
         if (chatClient == null) {
             return Flux.just(StreamEvent.error("AI model not available. Please configure an AI provider."));
         }
 
+        String prompt = renderEvidencePrompt(userQuery, results);
         List<RagResponse.Citation> citations = buildCitations(results);
         String citationsJson = StreamEvent.citations(citations);
 
         var promptSpec = chatClient.prompt().user(prompt);
-
-        String actualModelName = modelName;
-        if (Boolean.TRUE.equals(thinking)) {
-            actualModelName += "|thinking:enabled";
-            if (reasoningEffort != null && !reasoningEffort.isBlank()) {
-                actualModelName += "|effort:" + reasoningEffort;
-            }
-        }
-
         var optionsBuilder = org.springframework.ai.openai.OpenAiChatOptions.builder();
-        if (actualModelName != null && !actualModelName.isBlank()) {
+        String actualModelName = buildModelName(modelName, thinking, reasoningEffort);
+        if (actualModelName != null) {
             optionsBuilder.withModel(actualModelName);
         }
         if (temperature != null) optionsBuilder.withTemperature(temperature.floatValue());
         if (topP != null) optionsBuilder.withTopP(topP.floatValue());
         if (maxTokens != null) optionsBuilder.withMaxTokens(maxTokens);
-        
+
         promptSpec = promptSpec.options(optionsBuilder.build());
 
         return promptSpec
@@ -183,6 +139,53 @@ public class RagPipeline {
                 .content()
                 .map(StreamEvent::token)
                 .concatWithValues(citationsJson, StreamEvent.done(null));
+    }
+
+    private String renderInsufficientPrompt(String userQuery) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("query", userQuery);
+        return promptTemplateManager.render("evidence-insufficient-prompt", vars);
+    }
+
+    private String renderEvidencePrompt(String userQuery, List<SearchResult> results) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("evidence", buildBudgetedEvidenceContext(results));
+        vars.put("query", userQuery);
+        return promptTemplateManager.render("evidence-sufficient-prompt", vars);
+    }
+
+    private String buildModelName(String modelName, Boolean thinking, String reasoningEffort) {
+        if (modelName == null || modelName.isBlank()) {
+            return null;
+        }
+        if (!Boolean.TRUE.equals(thinking)) {
+            return modelName;
+        }
+        StringBuilder actual = new StringBuilder(modelName).append("|thinking:enabled");
+        if (reasoningEffort != null && !reasoningEffort.isBlank()) {
+            actual.append("|effort:").append(reasoningEffort);
+        }
+        return actual.toString();
+    }
+
+    private boolean hasSufficientEvidence(List<SearchResult> results, BigDecimal threshold) {
+        if (results.isEmpty()) return false;
+        if (threshold == null) return true;
+        return evidenceConfidence(results) >= threshold.doubleValue();
+    }
+
+    private double evidenceConfidence(List<SearchResult> results) {
+        List<SearchResult> ranked = results.stream()
+                .sorted(Comparator.comparingDouble(SearchResult::getScore).reversed())
+                .toList();
+        double topScore = ranked.get(0).getScore();
+        int supportCount = Math.min(3, ranked.size());
+        double topSupportAverage = ranked.stream()
+                .limit(supportCount)
+                .mapToDouble(SearchResult::getScore)
+                .average()
+                .orElse(0.0);
+        return Math.max(0.0, Math.min(1.0, 0.70 * topScore + 0.30 * topSupportAverage));
     }
 
     private void requireKbMember(Long knowledgeBaseId) {
@@ -224,12 +227,19 @@ public class RagPipeline {
     }
 
     private List<RagResponse.Citation> buildCitations(List<SearchResult> results) {
-        Set<Long> docIds = results.stream().map(SearchResult::getDocumentId).collect(Collectors.toSet());
+        Set<Long> docIds = results.stream()
+                .map(SearchResult::getDocumentId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, String> fileNames = new HashMap<>();
-        for (Long docId : docIds) {
-            Document doc = documentMapper.selectById(docId);
-            if (doc != null) {
-                fileNames.put(docId, doc.getFileName());
+        if (!docIds.isEmpty()) {
+            List<Document> docs = documentMapper.selectBatchIds(docIds);
+            if (docs != null) {
+                for (Document doc : docs) {
+                    if (doc != null) {
+                        fileNames.put(doc.getId(), doc.getFileName());
+                    }
+                }
             }
         }
 
@@ -245,15 +255,32 @@ public class RagPipeline {
         return citations;
     }
 
-    private String buildContext(List<SearchResult> results) {
+    private String buildBudgetedEvidenceContext(List<SearchResult> results) {
         StringBuilder sb = new StringBuilder();
+        int budget = Math.max(400, maxEvidenceContextChars);
         for (int i = 0; i < results.size(); i++) {
-            SearchResult r = results.get(i);
-            sb.append("[来源").append(i + 1).append("] 文档ID=").append(r.getDocumentId())
-                    .append(" 切片#").append(r.getChunkIndex())
-                    .append(" (评分=").append(String.format("%.3f", r.getScore())).append(")\n");
-            sb.append(r.getContent()).append("\n\n");
+            String block = evidenceBlock(i, results.get(i));
+            int remaining = budget - sb.length();
+            if (remaining <= 0) break;
+            if (block.length() <= remaining) {
+                sb.append(block);
+                continue;
+            }
+            if (sb.isEmpty()) {
+                sb.append(block, 0, Math.max(0, remaining));
+            }
+            break;
         }
+        return sb.toString();
+    }
+
+    private String evidenceBlock(int index, SearchResult r) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[来源").append(index + 1).append("] 文档ID=").append(r.getDocumentId())
+                .append(" 切片#").append(r.getChunkIndex())
+                .append(" 置信度=").append(String.format("%.3f", r.getScore()))
+                .append(" 检索源=").append(r.getSource()).append("\n");
+        sb.append(r.getContent()).append("\n\n");
         return sb.toString();
     }
 }

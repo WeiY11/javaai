@@ -3,6 +3,7 @@ package com.example.evimind.ingestion;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.bulk.BulkOperation;
+import com.example.evimind.model.entity.DocumentChunk;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -20,7 +21,21 @@ public class ElasticsearchIndexService {
     private ElasticsearchClient elasticsearchClient;
     private static final String INDEX_NAME = "document_chunk";
 
-    public void indexChunks(List<String> chunks, Long knowledgeBaseId, Long documentId) {
+    public void indexChunkContents(List<String> chunks, Long knowledgeBaseId, Long documentId) {
+        List<DocumentChunk> chunkEntities = new ArrayList<>();
+        for (int i = 0; i < chunks.size(); i++) {
+            DocumentChunk chunk = new DocumentChunk();
+            chunk.setId(null);
+            chunk.setKnowledgeBaseId(knowledgeBaseId);
+            chunk.setDocumentId(documentId);
+            chunk.setChunkIndex(i);
+            chunk.setContent(chunks.get(i));
+            chunkEntities.add(chunk);
+        }
+        indexChunks(chunkEntities, knowledgeBaseId, documentId);
+    }
+
+    public void indexChunks(List<DocumentChunk> chunks, Long knowledgeBaseId, Long documentId) {
         if (elasticsearchClient == null) {
             log.warn("ElasticsearchClient not available, skipping indexing");
             return;
@@ -28,12 +43,17 @@ public class ElasticsearchIndexService {
         try {
             List<BulkOperation> operations = new ArrayList<>();
             for (int i = 0; i < chunks.size(); i++) {
-                String chunkId = "chunk_" + documentId + "_" + i;
+                DocumentChunk chunk = chunks.get(i);
+                Integer chunkIndex = chunk.getChunkIndex() != null ? chunk.getChunkIndex() : i;
+                String chunkId = chunk.getId() != null
+                        ? "chunk_" + chunk.getId()
+                        : "chunk_" + documentId + "_" + chunkIndex;
                 Map<String, Object> doc = Map.of(
-                        "content", chunks.get(i),
+                        "content", chunk.getContent(),
                         "knowledgeBaseId", knowledgeBaseId,
                         "documentId", documentId,
-                        "chunkIndex", i
+                        "chunkIndex", chunkIndex,
+                        "chunkId", chunkId
                 );
                 operations.add(BulkOperation.of(b -> b
                         .index(idx -> idx

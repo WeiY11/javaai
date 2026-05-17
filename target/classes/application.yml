@@ -74,6 +74,10 @@ custom:
         temperature: 0.7
   data:
     base-dir: ${DATA_BASE_DIR:/data}
+  rag:
+    max-evidence-context-chars: ${RAG_MAX_EVIDENCE_CONTEXT_CHARS:6000}
+    search:
+      backend-timeout-ms: ${RAG_SEARCH_BACKEND_TIMEOUT_MS:1500}
   analysis:
     max-content-size: 512000
     max-prompt-size: 100000

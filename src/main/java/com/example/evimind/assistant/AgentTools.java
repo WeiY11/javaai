@@ -19,10 +19,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AgentTools {
 
+    private static final int DEFAULT_TOP_K = 5;
+    private static final int MAX_TOP_K = 10;
+    private static final int MAX_TOOL_OUTPUT_CHARS = 4000;
+
     private final HybridSearchService hybridSearchService;
 
     public record KbSearchRequest(
-            @JsonProperty(required = true) @JsonPropertyDescription("用户的查询文本") String query,
+            @JsonProperty(required = true) @JsonPropertyDescription("用户查询文本") String query,
             @JsonProperty(required = true) @JsonPropertyDescription("知识库ID") Long knowledgeBaseId,
             @JsonProperty(defaultValue = "5") @JsonPropertyDescription("返回结果数量") int topK
     ) {}
@@ -30,11 +34,11 @@ public class AgentTools {
     public record KbSearchResponse(String results, String error) {}
 
     @Bean
-    @Description("在指定知识库中检索相关文档内容。当用户提问涉及知识库中的信息时，调用此工具进行语义和关键词混合检索。")
+    @Description("在指定知识库中检索相关文档内容。当用户提问涉及知识库信息时，调用此工具进行语义和关键词混合检索。")
     public Function<KbSearchRequest, KbSearchResponse> kbSearch() {
         return request -> {
             try {
-                int topK = request.topK() > 0 ? request.topK() : 5;
+                int topK = Math.min(MAX_TOP_K, request.topK() > 0 ? request.topK() : DEFAULT_TOP_K);
                 List<SearchResult> results = hybridSearchService.search(
                         request.query(), request.knowledgeBaseId(), topK);
 
@@ -42,16 +46,26 @@ public class AgentTools {
                     return new KbSearchResponse("未找到相关内容", null);
                 }
 
-                String resultText = results.stream()
-                        .map(r -> "[文档ID=" + r.getDocumentId() + " 切片#" + r.getChunkIndex()
-                                + " 评分=" + String.format("%.3f", r.getScore()) + "]\n" + r.getContent())
-                        .collect(Collectors.joining("\n\n"));
-
-                return new KbSearchResponse(resultText, null);
+                String resultText = formatResults(results);
+                return new KbSearchResponse(limitOutput(resultText), null);
             } catch (Exception e) {
                 log.error("KB_SEARCH tool failed", e);
                 return new KbSearchResponse(null, "检索失败: " + e.getMessage());
             }
         };
+    }
+
+    private String limitOutput(String resultText) {
+        if (resultText.length() <= MAX_TOOL_OUTPUT_CHARS) {
+            return resultText;
+        }
+        return resultText.substring(0, MAX_TOOL_OUTPUT_CHARS);
+    }
+
+    private String formatResults(List<SearchResult> results) {
+        return results.stream()
+                .map(result -> "[文档ID=" + result.getDocumentId() + " 切片#" + result.getChunkIndex()
+                        + " 置信度=" + String.format("%.3f", result.getScore()) + "]\n" + result.getContent())
+                .collect(Collectors.joining("\n\n"));
     }
 }
