@@ -9,7 +9,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -20,6 +19,11 @@ public class SimpleKeywordSearchService {
     private DocumentChunkMapper documentChunkMapper;
 
     public List<SearchResult> search(String query, Long knowledgeBaseId, int topK) {
+        List<String> queryTerms = searchableTerms(query);
+        if (queryTerms.isEmpty()) {
+            return List.of();
+        }
+
         List<DocumentChunk> allChunks = documentChunkMapper.selectList(
                 new LambdaQueryWrapper<DocumentChunk>()
                         .eq(DocumentChunk::getKnowledgeBaseId, knowledgeBaseId)
@@ -27,15 +31,12 @@ public class SimpleKeywordSearchService {
 
         if (allChunks.isEmpty()) return List.of();
 
-        String[] queryTerms = query.toLowerCase().split("[\\s,，。！？.!?]+");
-
         List<SearchResult> scored = new ArrayList<>();
         for (DocumentChunk chunk : allChunks) {
             String content = chunk.getContent() != null ? chunk.getContent().toLowerCase() : "";
             double score = 0.0;
 
             for (String term : queryTerms) {
-                if (term.length() < 2) continue;
                 int count = 0;
                 int idx = 0;
                 while ((idx = content.indexOf(term, idx)) >= 0) {
@@ -55,7 +56,7 @@ public class SimpleKeywordSearchService {
                         chunk.getKnowledgeBaseId(),
                         chunk.getContent(),
                         chunk.getChunkIndex() != null ? chunk.getChunkIndex() : 0,
-                        Math.min(score / queryTerms.length, 1.0),
+                        Math.min(score / queryTerms.size(), 1.0),
                         "local_keyword"
                 ));
             }
@@ -68,5 +69,15 @@ public class SimpleKeywordSearchService {
 
         log.debug("Simple keyword search returned {} results for KB {}", scored.size(), knowledgeBaseId);
         return scored;
+    }
+
+    private List<String> searchableTerms(String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(query.toLowerCase().split("[\\s,\\uFF0C\\u3002\\uFF01\\uFF1F!?]+"))
+                .filter(term -> term.length() >= 2)
+                .distinct()
+                .toList();
     }
 }

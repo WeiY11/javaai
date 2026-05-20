@@ -69,7 +69,8 @@ public class RagPipeline {
 
         response.setEvidenceStatus(RagResponse.EvidenceStatus.SUFFICIENT);
 
-        String prompt = renderEvidencePrompt(userQuery, results);
+        List<SearchResult> evidencePortfolio = selectEvidencePortfolio(userQuery, results);
+        String prompt = renderEvidencePrompt(userQuery, evidencePortfolio);
         ChatClient chatClient = resolveChatClient();
         if (chatClient == null) {
             response.setAnswer("AI model not available. Please configure an AI provider.");
@@ -81,7 +82,7 @@ public class RagPipeline {
                 .call()
                 .content();
         response.setAnswer(answer);
-        response.setCitations(buildCitations(results));
+        response.setCitations(buildCitations(evidencePortfolio));
 
         return response;
     }
@@ -120,8 +121,9 @@ public class RagPipeline {
             return Flux.just(StreamEvent.error("AI model not available. Please configure an AI provider."));
         }
 
-        String prompt = renderEvidencePrompt(userQuery, results);
-        List<RagResponse.Citation> citations = buildCitations(results);
+        List<SearchResult> evidencePortfolio = selectEvidencePortfolio(userQuery, results);
+        String prompt = renderEvidencePrompt(userQuery, evidencePortfolio);
+        List<RagResponse.Citation> citations = buildCitations(evidencePortfolio);
         String citationsJson = StreamEvent.citations(citations);
 
         var promptSpec = chatClient.prompt().user(prompt);
@@ -149,9 +151,9 @@ public class RagPipeline {
         return promptTemplateManager.render("evidence-insufficient-prompt", vars);
     }
 
-    private String renderEvidencePrompt(String userQuery, List<SearchResult> results) {
+    private String renderEvidencePrompt(String userQuery, List<SearchResult> evidencePortfolio) {
         Map<String, Object> vars = new HashMap<>();
-        vars.put("evidence", buildBudgetedEvidenceContext(userQuery, results));
+        vars.put("evidence", buildBudgetedEvidenceContext(evidencePortfolio));
         vars.put("query", userQuery);
         return promptTemplateManager.render("evidence-sufficient-prompt", vars);
     }
@@ -257,12 +259,16 @@ public class RagPipeline {
         return citations;
     }
 
-    private String buildBudgetedEvidenceContext(String userQuery, List<SearchResult> results) {
+    private List<SearchResult> selectEvidencePortfolio(String userQuery, List<SearchResult> results) {
+        int budget = Math.max(400, maxEvidenceContextChars);
+        return evidencePortfolioSelector.select(userQuery, results, budget);
+    }
+
+    private String buildBudgetedEvidenceContext(List<SearchResult> evidencePortfolio) {
         StringBuilder sb = new StringBuilder();
         int budget = Math.max(400, maxEvidenceContextChars);
-        List<SearchResult> portfolio = evidencePortfolioSelector.select(userQuery, results, budget);
-        for (int i = 0; i < portfolio.size(); i++) {
-            String block = evidenceBlock(i, portfolio.get(i));
+        for (int i = 0; i < evidencePortfolio.size(); i++) {
+            String block = evidenceBlock(i, evidencePortfolio.get(i));
             int remaining = budget - sb.length();
             if (remaining <= 0) break;
             if (block.length() <= remaining) {

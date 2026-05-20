@@ -17,20 +17,24 @@ public class EvidencePortfolioSelector {
         }
 
         int budget = Math.max(MIN_CONTEXT_BUDGET, maxContextChars);
-        List<SearchResult> pool = deduplicate(candidates).stream()
+        List<CandidateFeature> pool = deduplicate(candidates).stream()
                 .sorted(Comparator.comparingDouble(SearchResult::getScore).reversed())
+                .map(result -> new CandidateFeature(
+                        result,
+                        tokenize(result.getContent()),
+                        estimateBlockChars(result)))
                 .toList();
         Set<String> queryTerms = tokenize(query);
-        List<SearchResult> selected = new ArrayList<>();
+        List<CandidateFeature> selected = new ArrayList<>();
         Set<String> coveredTerms = new HashSet<>();
         Set<Long> selectedDocs = new HashSet<>();
         int usedChars = 0;
 
         while (selected.size() < pool.size()) {
             CandidateScore best = null;
-            for (SearchResult candidate : pool) {
+            for (CandidateFeature candidate : pool) {
                 if (selected.contains(candidate)) continue;
-                int candidateChars = estimateBlockChars(candidate);
+                int candidateChars = candidate.blockChars();
                 if (!selected.isEmpty() && usedChars + candidateChars > budget) continue;
 
                 CandidateScore score = scoreCandidate(candidate, selected, selectedDocs, queryTerms, coveredTerms);
@@ -48,14 +52,14 @@ public class EvidencePortfolioSelector {
             if (best == null) break;
             if (!selected.isEmpty() && best.value < MIN_MARGINAL_VALUE_AFTER_FIRST) break;
             selected.add(best.result);
-            usedChars += estimateBlockChars(best.result);
-            selectedDocs.add(best.result.getDocumentId());
+            usedChars += best.result.blockChars();
+            selectedDocs.add(best.result.result().getDocumentId());
             coveredTerms.addAll(matchedQueryTerms(best.result, queryTerms));
 
             if (usedChars >= budget) break;
         }
 
-        return selected;
+        return selected.stream().map(CandidateFeature::result).toList();
     }
 
     private List<SearchResult> deduplicate(List<SearchResult> candidates) {
@@ -70,28 +74,28 @@ public class EvidencePortfolioSelector {
         return new ArrayList<>(bestByChunk.values());
     }
 
-    private CandidateScore scoreCandidate(SearchResult candidate,
-                                          List<SearchResult> selected,
+    private CandidateScore scoreCandidate(CandidateFeature candidate,
+                                          List<CandidateFeature> selected,
                                           Set<Long> selectedDocs,
                                           Set<String> queryTerms,
                                           Set<String> coveredTerms) {
-        double confidence = clamp(candidate.getScore());
+        double confidence = clamp(candidate.result().getScore());
         double coverageGain = coverageGain(candidate, queryTerms, coveredTerms);
-        double diversityBonus = selectedDocs.contains(candidate.getDocumentId()) ? 0.0 : 1.0;
+        double diversityBonus = selectedDocs.contains(candidate.result().getDocumentId()) ? 0.0 : 1.0;
         double redundancyPenalty = redundancy(candidate, selected);
         double value = 0.62 * confidence + 0.22 * coverageGain + 0.12 * diversityBonus - 0.24 * redundancyPenalty;
         return new CandidateScore(candidate, value, coverageGain, diversityBonus);
     }
 
-    private double coverageGain(SearchResult candidate, Set<String> queryTerms, Set<String> coveredTerms) {
+    private double coverageGain(CandidateFeature candidate, Set<String> queryTerms, Set<String> coveredTerms) {
         if (queryTerms.isEmpty()) return 0.0;
         Set<String> matched = matchedQueryTerms(candidate, queryTerms);
         matched.removeAll(coveredTerms);
         return (double) matched.size() / queryTerms.size();
     }
 
-    private Set<String> matchedQueryTerms(SearchResult result, Set<String> queryTerms) {
-        Set<String> contentTerms = tokenize(result.getContent());
+    private Set<String> matchedQueryTerms(CandidateFeature result, Set<String> queryTerms) {
+        Set<String> contentTerms = result.terms();
         Set<String> matched = new HashSet<>();
         for (String term : queryTerms) {
             if (contentTerms.contains(term)) {
@@ -101,13 +105,11 @@ public class EvidencePortfolioSelector {
         return matched;
     }
 
-    private double redundancy(SearchResult candidate, List<SearchResult> selected) {
+    private double redundancy(CandidateFeature candidate, List<CandidateFeature> selected) {
         if (selected.isEmpty()) return 0.0;
-        Set<String> candidateTerms = tokenize(candidate.getContent());
         double maxOverlap = 0.0;
-        for (SearchResult selectedResult : selected) {
-            Set<String> selectedTerms = tokenize(selectedResult.getContent());
-            maxOverlap = Math.max(maxOverlap, jaccard(candidateTerms, selectedTerms));
+        for (CandidateFeature selectedResult : selected) {
+            maxOverlap = Math.max(maxOverlap, jaccard(candidate.terms(), selectedResult.terms()));
         }
         return maxOverlap;
     }
@@ -165,5 +167,7 @@ public class EvidencePortfolioSelector {
         return value;
     }
 
-    private record CandidateScore(SearchResult result, double value, double coverageGain, double diversityBonus) {}
+    private record CandidateFeature(SearchResult result, Set<String> terms, int blockChars) {}
+
+    private record CandidateScore(CandidateFeature result, double value, double coverageGain, double diversityBonus) {}
 }

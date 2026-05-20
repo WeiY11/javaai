@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -145,6 +146,41 @@ class RagPipelineTest {
         assertTrue(evidence.length() <= 800);
         assertTrue(evidence.contains("[来源1]"));
         assertFalse(evidence.contains("third"));
+    }
+
+    @Test
+    void shouldReturnCitationsOnlyForBudgetSelectedEvidence() {
+        ReflectionTestUtils.setField(ragPipeline, "maxEvidenceContextChars", 800);
+        KnowledgeBase kb = new KnowledgeBase();
+        kb.setId(1L);
+        kb.setEvidenceThreshold(new BigDecimal("0.50"));
+
+        String longContent = "evidence ".repeat(120);
+        List<SearchResult> results = List.of(
+                new SearchResult("c1", 1L, 1L, longContent + "alpha", 0, 0.95, "rrf_fused"),
+                new SearchResult("c2", 2L, 1L, longContent + "beta", 0, 0.90, "rrf_fused"),
+                new SearchResult("c3", 3L, 1L, longContent + "gamma", 0, 0.85, "rrf_fused")
+        );
+        ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+
+        when(kbMemberMapper.selectCount(any())).thenReturn(1L);
+        when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
+        when(hybridSearchService.search(anyString(), eq(1L), eq(10))).thenReturn(results);
+        when(promptTemplateManager.render(eq("evidence-sufficient-prompt"), anyMap()))
+                .thenReturn("prompt");
+        when(chatClients.isEmpty()).thenReturn(false);
+        when(chatClients.values()).thenReturn(List.of(chatClient));
+        when(chatClient.prompt().user(anyString()).call().content()).thenReturn("answer");
+        when(documentMapper.selectBatchIds(anyCollection())).thenReturn(List.of());
+
+        RagResponse response = ragPipeline.query("alpha beta gamma", 1L);
+
+        assertEquals("answer", response.getAnswer());
+        assertEquals(1, response.getCitations().size());
+        assertEquals(1L, response.getCitations().get(0).getDocumentId());
+        ArgumentCaptor<Collection<Long>> docIdsCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(documentMapper).selectBatchIds(docIdsCaptor.capture());
+        assertEquals(List.of(1L), List.copyOf(docIdsCaptor.getValue()));
     }
 
     @Test
