@@ -9,7 +9,7 @@ spring:
       mode: always
       schema-locations: classpath:schema-h2.sql
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    open-in-view: false
     hibernate:
       ddl-auto: none
     show-sql: false
@@ -33,3 +33,7 @@ jwt:
   secret: dev-only-secret-key-for-local-testing-2026
   access-token-expiration: 3600000
   refresh-token-expiration: 604800000
+
+custom:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173}

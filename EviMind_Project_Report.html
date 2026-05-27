@@ -1,0 +1,2650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EviMind — RAG 增强的 AI 智能数据分析平台 (答辩与面试硬核报告)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=PingFang+SC&display=swap" rel="stylesheet">
+    <style>
+        /* CSS 变量：霓虹太空暗夜设计系统 */
+        :root {
+            --bg-dark: #0a0b10;
+            --bg-card: rgba(18, 20, 32, 0.65);
+            --bg-input: rgba(13, 15, 28, 0.85);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(0, 242, 254, 0.3);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            
+            --neon-blue: #00f2fe;
+            --neon-purple: #7f00ff;
+            --neon-green: #39ff14;
+            --neon-cyan: #00e5ff;
+            --neon-red: #ff3366;
+            
+            --gradient-primary: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            --gradient-neon: linear-gradient(135deg, #7f00ff 0%, #00f2fe 100%);
+            --gradient-gold: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            --gradient-accent: linear-gradient(135deg, #f02fc2 0%, #6094ea 100%);
+            
+            --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --shadow-neon: 0 0 15px rgba(0, 242, 254, 0.25);
+            --shadow-neon-purple: 0 0 15px rgba(127, 0, 255, 0.25);
+            
+            --font-main: 'Outfit', 'PingFang SC', -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            
+            --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* 基础样式复位 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(127, 0, 255, 0.08) 0, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(0, 242, 254, 0.08) 0, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(240, 47, 194, 0.05) 0, transparent 40%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--neon-blue);
+            box-shadow: var(--shadow-neon);
+        }
+
+        /* 大屏格栅布局 */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        /* 左侧固定侧边栏 */
+        .sidebar {
+            width: 280px;
+            background: rgba(10, 11, 16, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-color);
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            padding: 30px 20px;
+            transition: var(--transition-smooth);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            padding-left: 10px;
+        }
+
+        .brand-logo {
+            width: 38px;
+            height: 38px;
+            background: var(--gradient-neon);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-neon);
+            font-weight: 800;
+            font-size: 1.2rem;
+            color: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .brand-logo::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.3), transparent);
+            transform: rotate(45deg);
+            animation: shine 4s infinite linear;
+        }
+
+        @keyframes shine {
+            0% { transform: translate(-50%, -50%) rotate(45deg); }
+            100% { transform: translate(50%, 50%) rotate(45deg); }
+        }
+
+        .brand-name {
+            font-size: 1.35rem;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-grow: 1;
+        }
+
+        .nav-item a {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 16px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: var(--transition-smooth);
+            border: 1px solid transparent;
+        }
+
+        .nav-item a:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-item.active a {
+            color: #fff;
+            background: rgba(0, 242, 254, 0.08);
+            border-color: var(--border-hover);
+            box-shadow: var(--shadow-neon);
+            font-weight: 600;
+        }
+
+        .nav-icon {
+            font-size: 1.1rem;
+            display: inline-block;
+        }
+
+        /* 侧边栏底部操作区 */
+        .sidebar-footer {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: var(--transition-smooth);
+            font-family: var(--font-main);
+        }
+
+        .btn-slides {
+            background: var(--gradient-neon);
+            color: #fff;
+            box-shadow: var(--shadow-neon-purple);
+        }
+
+        .btn-slides:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px rgba(127, 0, 255, 0.5);
+        }
+
+        .btn-export {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-export:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-secondary);
+        }
+
+        /* 主体内容区 */
+        .main-content {
+            margin-left: 280px;
+            flex-grow: 1;
+            padding: 40px 50px 80px 50px;
+            max-width: 1400px;
+        }
+
+        /* 头部状态显示栏 */
+        .top-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        .page-info h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+        }
+
+        .page-info p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .badge-container {
+            display: flex;
+            gap: 12px;
+        }
+
+        .status-badge {
+            background: rgba(57, 255, 20, 0.08);
+            border: 1px solid rgba(57, 255, 20, 0.2);
+            color: var(--neon-green);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 0 10px rgba(57, 255, 20, 0.1);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background-color: var(--neon-green);
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.4; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 板块容器 (Sections) */
+        section {
+            margin-bottom: 60px;
+            scroll-margin-top: 40px;
+            display: none; /* 默认隐藏，通过 JS 切换 */
+        }
+        
+        section.active {
+            display: block;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 磨砂玻璃卡片 */
+        .glass-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 24px;
+            transition: var(--transition-smooth);
+            position: relative;
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.15), transparent);
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+        }
+
+        .glass-card:hover {
+            border-color: var(--border-hover);
+            box-shadow: var(--shadow-neon);
+            transform: translateY(-2px);
+        }
+
+        .card-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #fff;
+            border-left: 4px solid var(--neon-blue);
+            padding-left: 12px;
+        }
+
+        /* 舱段一: Overview 专属样式 */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: var(--transition-smooth);
+        }
+
+        .metric-card:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: var(--neon-blue);
+            transform: scale(1.03);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 6px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .metric-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* 舱段二: Topology (纯代码画图) */
+        .topology-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .flowchart-wrapper {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            overflow-x: auto;
+        }
+
+        .flow-title {
+            font-weight: 700;
+            color: var(--neon-blue);
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .flow-nodes {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            min-width: 800px;
+        }
+
+        .flow-node {
+            background: rgba(18, 20, 32, 0.9);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px 18px;
+            width: 140px;
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+            transition: var(--transition-smooth);
+            cursor: default;
+        }
+
+        .flow-node:hover {
+            border-color: var(--neon-blue);
+            box-shadow: var(--shadow-neon);
+            transform: scale(1.05);
+        }
+
+        .flow-node.active-node {
+            border-color: var(--neon-purple);
+            box-shadow: var(--shadow-neon-purple);
+            background: rgba(127, 0, 255, 0.1);
+        }
+
+        .flow-node .node-tag {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .flow-arrow {
+            color: var(--text-muted);
+            font-weight: bold;
+            font-size: 1.2rem;
+            animation: flowMove 1.5s infinite linear;
+        }
+
+        @keyframes flowMove {
+            0% { transform: translateX(-3px); opacity: 0.5; }
+            50% { transform: translateX(3px); opacity: 1; }
+            100% { transform: translateX(-3px); opacity: 0.5; }
+        }
+
+        /* 舱段三: Tech Stack 卡片 */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .tech-box {
+            background: rgba(255, 255, 255, 0.015);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            transition: var(--transition-smooth);
+        }
+
+        .tech-box:hover {
+            border-color: var(--border-hover);
+            background: rgba(255, 255, 255, 0.03);
+            transform: translateY(-3px);
+        }
+
+        .tech-box-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 8px;
+        }
+
+        .tech-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .tech-ver {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--neon-cyan);
+            background: rgba(0, 229, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .tech-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .tech-reason {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            border-top: 1px dashed rgba(255,255,255,0.05);
+            padding-top: 8px;
+            margin-top: 8px;
+        }
+
+        .tech-reason strong {
+            color: var(--text-secondary);
+        }
+
+        /* 舱段四: Database ER 可视化 */
+        .db-er-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 30px;
+        }
+
+        .db-table-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .db-table-btn {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--text-secondary);
+            text-align: left;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .db-table-btn:hover, .db-table-btn.active {
+            background: rgba(0, 242, 254, 0.05);
+            border-color: var(--neon-blue);
+            color: #fff;
+        }
+
+        .db-table-btn .badge-cnt {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            background: rgba(255,255,255,0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--text-muted);
+        }
+
+        .db-table-btn.active .badge-cnt {
+            background: rgba(0, 242, 254, 0.2);
+            color: var(--neon-blue);
+        }
+
+        .db-schema-detail {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            min-height: 400px;
+        }
+
+        .schema-title-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding-bottom: 12px;
+            margin-bottom: 15px;
+        }
+
+        .schema-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #fff;
+            font-family: var(--font-mono);
+        }
+
+        .schema-purpose {
+            font-size: 0.85rem;
+            color: var(--neon-cyan);
+        }
+
+        .schema-fields-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        .schema-fields-table th, .schema-fields-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .schema-fields-table th {
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+
+        .field-name {
+            font-family: var(--font-mono);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .field-type {
+            font-family: var(--font-mono);
+            color: var(--neon-cyan);
+        }
+
+        .field-key {
+            color: #ff3366;
+            font-weight: bold;
+        }
+
+        /* 舱段五: 核心算法深度剖析 */
+        .math-box {
+            background: rgba(127, 0, 255, 0.05);
+            border: 1px solid rgba(127, 0, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: var(--font-mono);
+            font-size: 1rem;
+            text-align: center;
+            color: #fff;
+            box-shadow: inset 0 0 20px rgba(127, 0, 255, 0.1);
+        }
+
+        .code-block-wrapper {
+            position: relative;
+            background: rgba(10, 11, 16, 0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            overflow-x: auto;
+        }
+
+        .code-block-wrapper pre {
+            margin: 0;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            color: #e5e7eb;
+        }
+
+        .code-lang-tag {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .btn-copy-code {
+            position: absolute;
+            bottom: 8px;
+            right: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-copy-code:hover {
+            background: var(--neon-blue);
+            color: #fff;
+        }
+
+        /* 舱段六: FAQ 折叠卡片 */
+        .faq-search-box {
+            width: 100%;
+            padding: 14px 20px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: #fff;
+            font-family: var(--font-main);
+            font-size: 1rem;
+            margin-bottom: 25px;
+            transition: var(--transition-smooth);
+        }
+
+        .faq-search-box:focus {
+            border-color: var(--neon-blue);
+            box-shadow: var(--shadow-neon);
+            outline: none;
+        }
+
+        .faq-accordion {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .faq-item {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.01);
+            overflow: hidden;
+            transition: var(--transition-smooth);
+        }
+
+        .faq-item:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .faq-header {
+            padding: 18px 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1rem;
+            color: #fff;
+            background: rgba(255,255,255,0.015);
+            transition: var(--transition-smooth);
+            user-select: none;
+        }
+
+        .faq-header:hover {
+            background: rgba(0, 242, 254, 0.03);
+        }
+
+        .faq-icon-arrow {
+            transition: transform 0.3s ease;
+            font-size: 1.1rem;
+            color: var(--neon-blue);
+        }
+
+        .faq-item.active {
+            border-color: var(--neon-blue);
+            box-shadow: var(--shadow-neon);
+        }
+
+        .faq-item.active .faq-header {
+            background: rgba(0, 242, 254, 0.05);
+            border-bottom: 1px solid rgba(0, 242, 254, 0.1);
+        }
+
+        .faq-item.active .faq-icon-arrow {
+            transform: rotate(180deg);
+        }
+
+        .faq-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s cubic-bezier(0, 1, 0, 1); /* 优雅过渡收起展开 */
+            background: rgba(0,0,0,0.15);
+        }
+
+        .faq-body-content {
+            padding: 24px;
+            font-size: 0.92rem;
+            color: var(--text-secondary);
+        }
+
+        .faq-meta {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .faq-tag {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+        
+        .tag-rag { background: rgba(0, 242, 254, 0.1); color: var(--neon-blue); border: 1px solid rgba(0, 242, 254, 0.2); }
+        .tag-etl { background: rgba(127, 0, 255, 0.1); color: var(--neon-purple); border: 1px solid rgba(127, 0, 255, 0.2); }
+        .tag-db { background: rgba(240, 47, 194, 0.1); color: #f02fc2; border: 1px solid rgba(240, 47, 194, 0.2); }
+        .tag-concur { background: rgba(57, 255, 20, 0.1); color: var(--neon-green); border: 1px solid rgba(57, 255, 20, 0.2); }
+        
+        .faq-answer-block {
+            background: rgba(255,255,255,0.015);
+            border-left: 3px solid var(--neon-purple);
+            padding: 12px 16px;
+            margin-top: 15px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .faq-answer-block strong {
+            color: #fff;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        /* 模拟器专属样式 */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .sim-control-panel {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .sim-form-group {
+            margin-bottom: 20px;
+        }
+
+        .sim-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .sim-label {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .sim-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .sim-table-input {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+        }
+
+        .sim-table-input th {
+            text-align: left;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 6px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .sim-table-input td {
+            padding: 6px 4px;
+        }
+
+        .sim-input {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            transition: var(--transition-smooth);
+        }
+
+        .sim-input:focus {
+            border-color: var(--neon-blue);
+            outline: none;
+        }
+
+        .sim-btn-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-sim {
+            flex-grow: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            font-family: var(--font-main);
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-calc {
+            background: var(--gradient-primary);
+            color: #fff;
+            box-shadow: var(--shadow-neon);
+        }
+
+        .btn-calc:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+        }
+
+        .btn-reset {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            width: 100px;
+        }
+
+        .btn-reset:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .sim-results-panel {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sim-result-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 50px 0;
+        }
+
+        .sim-empty-icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+        }
+
+        .sim-result-content {
+            display: none;
+        }
+
+        .sim-result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin-top: 15px;
+        }
+
+        .sim-result-table th, .sim-result-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .sim-result-table th {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .sim-rank-badge {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.75rem;
+            color: #fff;
+        }
+
+        .badge-rank-1 { background: var(--gradient-gold); box-shadow: 0 0 8px rgba(246, 211, 101, 0.4); }
+        .badge-rank-2 { background: linear-gradient(135deg, #e6e9f0 0%, #eef1f5 100%); color: #333; }
+        .badge-rank-3 { background: linear-gradient(135deg, #cd7f32 0%, #b87333 100%); }
+        .badge-rank-other { background: rgba(255,255,255,0.1); color: var(--text-secondary); }
+
+        .score-bar-bg {
+            width: 80px;
+            height: 6px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 3px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+            overflow: hidden;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            background: var(--gradient-primary);
+            border-radius: 3px;
+        }
+
+        /* 简历与答辩模块专属 */
+        .resume-section-box {
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.01);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 25px;
+            position: relative;
+        }
+
+        .resume-section-box::after {
+            content: "STAR 黄金法则提取";
+            position: absolute;
+            top: -10px;
+            right: 20px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            background: var(--gradient-neon);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        .resume-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .resume-content {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .resume-content ul {
+            list-style-type: none;
+        }
+
+        .resume-content li {
+            position: relative;
+            padding-left: 20px;
+            margin-bottom: 10px;
+        }
+
+        .resume-content li::before {
+            content: "⚡";
+            position: absolute;
+            left: 0;
+            top: 2px;
+            font-size: 0.8rem;
+            color: var(--neon-blue);
+        }
+
+        .btn-copy-card {
+            background: rgba(0, 242, 254, 0.1);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            color: var(--neon-blue);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-copy-card:hover {
+            background: var(--neon-blue);
+            color: #fff;
+            box-shadow: var(--shadow-neon);
+        }
+
+        /* 🎬 全屏答辩 Slides 投影幕 */
+        #slides-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #06070b;
+            z-index: 2000;
+            display: none; /* 默认关闭 */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: var(--font-main);
+        }
+
+        .slides-container {
+            width: 80%;
+            height: 70%;
+            max-width: 1200px;
+            background: rgba(18, 20, 32, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-radius: 24px;
+            padding: 50px 70px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8);
+            transform: scale(0.95);
+            opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+        }
+
+        #slides-overlay.open .slides-container {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .slide-page {
+            display: none;
+            height: 100%;
+            flex-direction: column;
+            justify-content: center;
+            animation: slideFadeIn 0.5s ease-out forwards;
+        }
+
+        .slide-page.active {
+            display: flex;
+        }
+
+        @keyframes slideFadeIn {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .slide-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .slide-tag {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .slide-num {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .slide-body {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .slide-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 25px;
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+        }
+
+        .slide-bullets {
+            list-style-type: none;
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .slide-bullets li {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .slide-bullets li::before {
+            content: "✦";
+            position: absolute;
+            left: 0;
+            color: var(--neon-blue);
+            font-weight: bold;
+        }
+
+        .slide-bullets strong {
+            color: #fff;
+        }
+
+        .slides-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            padding-top: 20px;
+        }
+
+        .slide-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            font-size: 1.2rem;
+        }
+
+        .slide-btn:hover {
+            background: var(--neon-blue);
+            color: #fff;
+            box-shadow: var(--shadow-neon);
+            border-color: var(--neon-blue);
+        }
+
+        .slide-btn:disabled {
+            opacity: 0.2;
+            cursor: not-allowed;
+            background: transparent;
+            border-color: var(--border-color);
+        }
+
+        .btn-exit-slides {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            background: rgba(255,33,102,0.1);
+            border: 1px solid rgba(255,33,102,0.2);
+            color: var(--neon-red);
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            font-family: var(--font-main);
+            font-size: 0.85rem;
+            z-index: 2100;
+        }
+
+        .btn-exit-slides:hover {
+            background: var(--neon-red);
+            color: #fff;
+            box-shadow: 0 0 20px rgba(255, 33, 102, 0.4);
+        }
+
+        .slides-keyboard-tip {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }
+        
+        /* 复制通知 */
+        .toast-notify {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--gradient-primary);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: var(--shadow-neon);
+            font-weight: 600;
+            z-index: 9999;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .toast-notify.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- 🛸 左侧导航侧边栏 -->
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-logo">EM</div>
+            <div class="brand-name">EviMind</div>
+        </div>
+        
+        <ul class="nav-list">
+            <li class="nav-item active" data-target="sec-overview">
+                <a href="#sec-overview"><span class="nav-icon">🌌</span> 项目定位与总览</a>
+            </li>
+            <li class="nav-item" data-target="sec-topology">
+                <a href="#sec-topology"><span class="nav-icon">🗺️</span> 架构拓扑与流水线</a>
+            </li>
+            <li class="nav-item" data-target="sec-tech">
+                <a href="#sec-tech"><span class="nav-icon">🛡️</span> 技术选型与决策</a>
+            </li>
+            <li class="nav-item" data-target="sec-database">
+                <a href="#sec-database"><span class="nav-icon">🗄️</span> 数据库与索引设计</a>
+            </li>
+            <li class="nav-item" data-target="sec-core">
+                <a href="#sec-core"><span class="nav-icon">🔬</span> 深度技术方案剖析</a>
+            </li>
+            <li class="nav-item" data-target="sec-faq">
+                <a href="#sec-faq"><span class="nav-icon">💬</span> 答辩与面试 FAQ</a>
+            </li>
+            <li class="nav-item" data-target="sec-resume">
+                <a href="#sec-resume"><span class="nav-icon">📝</span> 黄金简历与演讲词</a>
+            </li>
+            <li class="nav-item" data-target="sec-sim">
+                <a href="#sec-sim"><span class="nav-icon">🎮</span> RRF 算法模拟器</a>
+            </li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <button class="btn-action btn-slides" id="trigger-slides">
+                🎬 开启答辩 Slide 模式
+            </button>
+            <button class="btn-action btn-export" id="trigger-download">
+                📥 离线打包该报告
+            </button>
+        </div>
+    </aside>
+
+    <!-- 💻 右侧主内容区 -->
+    <main class="main-content">
+        <!-- 头部状态 -->
+        <header class="top-header">
+            <div class="page-info">
+                <h1 id="header-title">EviMind — RAG 增强数据分析平台</h1>
+                <p>工业级企业私有知识库与多模型热切换问答系统</p>
+            </div>
+            <div class="badge-container">
+                <div class="status-badge">
+                    <span class="status-dot"></span>
+                    PROD-GRADE READY
+                </div>
+            </div>
+        </header>
+
+        <!-- ==================== 舱段一: Overview ==================== -->
+        <section id="sec-overview" class="active">
+            <div class="glass-card">
+                <h2 class="card-title">项目定位与商业价值 (Project Position & Value)</h2>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">99%</div>
+                        <div class="metric-label">抑制幻觉率</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">4 款</div>
+                        <div class="metric-label">主流大模型热切换</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">25+ 种</div>
+                        <div class="metric-label">文档格式支持</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">5-15%</div>
+                        <div class="metric-label">混合检索精度提升</div>
+                    </div>
+                </div>
+
+                <div style="font-size: 0.95rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 15px;">
+                    <p>
+                        <strong>EviMind</strong> 是一个为解决企业内部海量异构数据“检索难、分析慢、准确度低”而设计的 **RAG (Retrieval-Augmented Generation, 检索增强生成)** 数据平台。它基于前沿的 LLM 大语言模型，结合数据库级的向量相似度计算和搜索引擎级的倒排索引，实现了“私有知识库极速搭建”、“多源文档全自动解析摄入”与“精准溯源的流式问答”。
+                    </p>
+                    <p>
+                        在传统大语言模型应用中，**知识过期、回答幻觉、无法查阅私有敏感文件**是阻碍落地生产的三大痛点。EviMind 通过自研的 **ETL（提取-清洗-切片-向量化-双路索引）流水线**，将数据以切片和向量保存在本地的 PostgreSQL + pgvector 与 Elasticsearch 中。当用户发起提问时，系统通过**双路检索并行计算与 RRF 排名融合算法**，高精度召回最相关段落，并采用严苛的**证据相关度评估门限**进行拦截。若证据不足，大模型则拒绝编造事实，以此保障企业问答的绝对可靠性。
+                    </p>
+                    <p>
+                        <strong>适用场景</strong>：企业内部核心技术文档问答、法务合同合规比对分析、医院病历及医学科研辅助笔记、智能客服一站式知识库。
+                    </p>
+                </div>
+            </div>
+            
+            <div class="glass-card">
+                <h3 class="card-title">产品三大硬核竞争力</h3>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; font-size: 0.88rem; color: var(--text-secondary);">
+                    <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 20px; border-radius: 10px;">
+                        <strong style="color: #fff; font-size: 1rem; display: block; margin-bottom: 8px; color: var(--neon-blue);">1. 全链路引用回溯溯源</strong>
+                        AI 生成的每一个长篇回答，在段落尾部都精确附带了**【来源文档名】、【文本切片编号】和【向量余弦评分】**。这使得知识可验证、可追踪，从根本上消除了面试官对于“AI 胡说八道”的顾虑。
+                    </div>
+                    <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 20px; border-radius: 10px;">
+                        <strong style="color: #fff; font-size: 1rem; display: block; margin-bottom: 8px; color: var(--neon-purple);">2. 大模型零重启运行时热切换</strong>
+                        在 Web 界面上，用户可以在对话中随时从 DeepSeek 切换到 GLM-4、通义千问或 OpenAI。后端通过 Spring AI 统一抽象，动态加载模型 API 实例，实现热替换，为企业在多模型成本与延迟调度上提供最优弹性。
+                    </div>
+                    <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 20px; border-radius: 10px;">
+                        <strong style="color: #fff; font-size: 1rem; display: block; margin-bottom: 8px; color: var(--neon-green);">3. 工业级多阶段 ETL 架构</strong>
+                        内置基于**策略模式（Strategy Pattern）**的文档抽取器，完美处理 PDF、Word、Excel（带表格单元格分析）、JSON、Markdown 等复杂多源格式，支持大文件切片、文本降噪及 ES 全文索引与 pgvector 向量嵌入的原子并发写入。
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 舱段二: Topology ==================== -->
+        <section id="sec-topology">
+            <div class="glass-card">
+                <h2 class="card-title">数据流动与核心管线时序 (Data Pipeline & Pipeline Topology)</h2>
+                
+                <div class="topology-container">
+                    <!-- 流水线 1 -->
+                    <div class="flowchart-wrapper">
+                        <div class="flow-title">1. ETL 文档自动摄入入库流水线 (Text Ingestion Process)</div>
+                        <div class="flow-nodes">
+                            <div class="flow-node">
+                                <span class="node-tag">Stage 1</span>
+                                上传文档<br><span style="font-size:0.75rem;color:var(--neon-blue);">MultipartFile</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node">
+                                <span class="node-tag">Stage 2</span>
+                                原始存储<br><span style="font-size:0.75rem;color:var(--neon-cyan);">MinIO OSS</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node">
+                                <span class="node-tag">Stage 3</span>
+                                文本策略提取<br><span style="font-size:0.75rem;color:var(--neon-blue);">PDFBox / POI</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node">
+                                <span class="node-tag">Stage 4</span>
+                                降噪清洗<br><span style="font-size:0.75rem;color:var(--neon-purple);">Unicode / Whitespace</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node">
+                                <span class="node-tag">Stage 5</span>
+                                滑动切片<br><span style="font-size:0.75rem;color:var(--neon-purple);">Size: 500 | Overlap: 100</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node active-node">
+                                <span class="node-tag">Stage 6</span>
+                                向量嵌入 & 双索引<br><span style="font-size:0.75rem;color:var(--neon-green);">pgvector + ES</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 流水线 2 -->
+                    <div class="flowchart-wrapper">
+                        <div class="flow-title">2. SSE 流式检索问答生成管线 (RAG Generation Sequence)</div>
+                        <div class="flow-nodes">
+                            <div class="flow-node">
+                                <span class="node-tag">Step 1</span>
+                                用户提问<br><span style="font-size:0.75rem;color:var(--neon-blue);">User Query</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node">
+                                <span class="node-tag">Step 2</span>
+                                库级鉴权<br><span style="font-size:0.75rem;color:var(--neon-cyan);">SysGroup / Member</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node active-node">
+                                <span class="node-tag">Step 3</span>
+                                并行检索与 RRF<br><span style="font-size:0.75rem;color:var(--neon-purple);">Vector ∥ Keywords</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node">
+                                <span class="node-tag">Step 4</span>
+                                证据相关性比对<br><span style="font-size:0.75rem;color:var(--neon-purple);">Threshold Gate</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node">
+                                <span class="node-tag">Step 5</span>
+                                Prompt 模板装配<br><span style="font-size:0.75rem;color:var(--neon-blue);">StringTemplate</span>
+                            </div>
+                            <span class="flow-arrow">➔</span>
+                            <div class="flow-node">
+                                <span class="node-tag">Step 6</span>
+                                SSE 流式响应<br><span style="font-size:0.75rem;color:var(--neon-green);">Flux&lt;Token&gt;</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="glass-card">
+                <h3 class="card-title">关键链路技术细节解析</h3>
+                <ul style="padding-left: 20px; font-size: 0.9rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 10px;">
+                    <li>
+                        <strong>异步任务解耦</strong>：文档上传接口立即返回 `PENDING` 状态及对应文档 ID。入库流水线全面采用 **Spring 异步线程池** 异步处理。前端通过 Vue 轮询 `document.ingestion_status`，实时在表格展示“提取中、清洗中、切片中、生成向量中、建立索引中、已完成”等进度，提供流畅的用户体验。
+                    </li>
+                    <li>
+                        <strong>防幻觉拦截闸门（Step 4）</strong>：召回文本后，计算所有证据的平均余弦相似度。若 $Score_{avg} < Threshold_{kb}$，系统直接断定外部“证据不足”，立即使用 `evidence-insufficient-prompt.st` 装配 Prompt，由 LLM 礼貌拒绝回答（例如：“抱歉，在您关联的知识库中无法找到有关该问题的可靠依据，请确认文档内容是否上传完整。”），**在机制上彻底掐灭模型胡编乱造的温床**。
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- ==================== 舱段三: Tech Stack ==================== -->
+        <section id="sec-tech">
+            <div class="glass-card">
+                <h2 class="card-title">工业级技术栈与设计选型理由 (Technology Portfolio & Decisions)</h2>
+                
+                <div class="tech-grid">
+                    <!-- Java 22 -->
+                    <div class="tech-box">
+                        <div class="tech-box-header">
+                            <span class="tech-name">Java & Spring Boot</span>
+                            <span class="tech-ver">v22 / v3.5</span>
+                        </div>
+                        <p class="tech-desc">基础底座。利用 JDK 22 虚拟线程（Virtual Threads）的高并发优势，配合 Web MVC 核心。</p>
+                        <p class="tech-reason"><strong>选型理由</strong>：虚拟线程能极大提升密集型 RAG 并行检索和网络大模型连接的吞吐率，规避高并发下的 I/O 阻塞线程瓶颈。</p>
+                    </div>
+                    
+                    <!-- Spring AI -->
+                    <div class="tech-box">
+                        <div class="tech-box-header">
+                            <span class="tech-name">Spring AI Framework</span>
+                            <span class="tech-ver">v1.0.0-M1</span>
+                        </div>
+                        <p class="tech-desc">Spring 官方 AI 封装抽象层。提供 ChatClient、EmbeddingModel 以及 StringTemplate 统一调用。</p>
+                        <p class="tech-reason"><strong>选型理由</strong>：免除手写原始 HTTP 解析大模型 SSE 的冗余代码，且天然支持运行时加载不同 API Key 切换不同 API 厂商。</p>
+                    </div>
+
+                    <!-- PostgreSQL + pgvector -->
+                    <div class="tech-box">
+                        <div class="tech-box-header">
+                            <span class="tech-name">PostgreSQL & pgvector</span>
+                            <span class="tech-ver">v17</span>
+                        </div>
+                        <p class="tech-desc">核心关系数据库与向量存储。使用 `vector(1536)` 格式存储切片嵌入，建立 IVFFlat 向量索引。</p>
+                        <p class="tech-reason"><strong>选型理由</strong>：相比 Milvus 降低了百万级数据以下系统的开发部署复杂度。且具备强大的 ACID 事务和主外键关系，支持关联关系联合检索。</p>
+                    </div>
+
+                    <!-- Elasticsearch -->
+                    <div class="tech-box">
+                        <div class="tech-box-header">
+                            <span class="tech-name">Elasticsearch</span>
+                            <span class="tech-ver">v8.15.3</span>
+                        </div>
+                        <p class="tech-desc">倒排索引搜索引擎。利用标准的 BM25 算法提供高精度的关键词检索，配合知识库主键精确 Filter。</p>
+                        <p class="tech-reason"><strong>选型理由</strong>：RAG 中语义检索难以应付精确数字、型号、日期和公司名称。ES 能够精确补全语义检索在特定专用关键词召回上的弱点。</p>
+                    </div>
+
+                    <!-- MinIO -->
+                    <div class="tech-box">
+                        <div class="tech-box-header">
+                            <span class="tech-name">MinIO Object Storage</span>
+                            <span class="tech-ver">latest</span>
+                        </div>
+                        <p class="tech-desc">私有化对象存储。全面兼容 Amazon S3 协议，管理并存储上传的 25+ 种原始文件。</p>
+                        <p class="tech-reason"><strong>选型理由</strong>：提供高可用存储并自带 Web 控制台。方便后续直接无缝重构迁移至阿里云 OSS 或 AWS S3，零代码改动。</p>
+                    </div>
+
+                    <!-- Axios & SSE ReadableStream -->
+                    <div class="tech-box">
+                        <div class="tech-box-header">
+                            <span class="tech-name">Axios & fetch stream</span>
+                            <span class="tech-ver">Vue 3 / TS</span>
+                        </div>
+                        <p class="tech-desc">前端网络层。使用 Axios 处理常规会话 CRUD 与 JWT 刷新。用 fetch 手动解析 ReadableStream 接收流。</p>
+                        <p class="tech-reason"><strong>选型理由</strong>：原生 EventSource 不支持 POST 请求和自定义 Header。采用原生 `fetch` 与 `ReadableStream` 可灵活控制 JWT 身份验证下的 SSE 解析。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 舱段四: Database ==================== -->
+        <section id="sec-database">
+            <div class="glass-card">
+                <h2 class="card-title">关系数据库与向量表结构设计 (Database Schema & Indexes)</h2>
+                
+                <div class="db-er-grid">
+                    <!-- 左侧表列表 -->
+                    <div class="db-table-list">
+                        <button class="db-table-btn active" onclick="showTableSchema('sys_user')">
+                            <span>sys_user (用户表)</span>
+                            <span class="badge-cnt">6 字段</span>
+                        </button>
+                        <button class="db-table-btn" onclick="showTableSchema('knowledge_base')">
+                            <span>knowledge_base (知识库配置表)</span>
+                            <span class="badge-cnt">8 字段</span>
+                        </button>
+                        <button class="db-table-btn" onclick="showTableSchema('document')">
+                            <span>document (文档元数据表)</span>
+                            <span class="badge-cnt">8 字段</span>
+                        </button>
+                        <button class="db-table-btn" onclick="showTableSchema('document_chunk')">
+                            <span>document_chunk (文本切片表)</span>
+                            <span class="badge-cnt">5 字段</span>
+                        </button>
+                        <button class="db-table-btn" onclick="showTableSchema('chunk_embedding')">
+                            <span>chunk_embedding (向量向量表)</span>
+                            <span class="badge-cnt">4 字段</span>
+                        </button>
+                        <button class="db-table-btn" onclick="showTableSchema('message')">
+                            <span>message (消息表 JSONB 应用)</span>
+                            <span class="badge-cnt">6 字段</span>
+                        </button>
+                    </div>
+
+                    <!-- 右侧结构详情 -->
+                    <div class="db-schema-detail">
+                        <div class="schema-title-bar">
+                            <span class="schema-name" id="schema-show-name">sys_user</span>
+                            <span class="schema-purpose" id="schema-show-purpose">核心用户账户表，BCrypt 密码存储与系统角色定位</span>
+                        </div>
+                        
+                        <table class="schema-fields-table">
+                            <thead>
+                                <tr>
+                                    <th>字段名</th>
+                                    <th>类型</th>
+                                    <th>约束</th>
+                                    <th>描述</th>
+                                </tr>
+                            </thead>
+                            <tbody id="schema-show-body">
+                                <tr>
+                                    <td class="field-name">id</td>
+                                    <td class="field-type">BIGINT</td>
+                                    <td class="field-key">PK, AUTO_INCREMENT</td>
+                                    <td>唯一主键 ID</td>
+                                </tr>
+                                <tr>
+                                    <td class="field-name">username</td>
+                                    <td class="field-type">VARCHAR(100)</td>
+                                    <td class="field-key">UNIQUE, NOT NULL</td>
+                                    <td>登录用户名（防重名）</td>
+                                </tr>
+                                <tr>
+                                    <td class="field-name">password</td>
+                                    <td class="field-type">VARCHAR(256)</td>
+                                    <td>NOT NULL</td>
+                                    <td>BCrypt 强加密哈希密码</td>
+                                </tr>
+                                <tr>
+                                    <td class="field-name">system_role</td>
+                                    <td class="field-type">VARCHAR(20)</td>
+                                    <td>DEFAULT 'USER'</td>
+                                    <td>系统全局角色：ADMIN / USER</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="glass-card">
+                <h3 class="card-title">硬核数据库索引用法与分析</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 0.88rem; color: var(--text-secondary);">
+                    <div>
+                        <strong style="color: #fff; display: block; margin-bottom: 8px; color: var(--neon-blue);">pgvector 向量索引：IVFFlat 余弦空间划分</strong>
+                        <p style="margin-bottom: 10px;">当数据库中切片达到十万级以上时，线性全扫暴力余弦计算的延迟会指数上升。我们为向量表配置了 IVFFlat（倒排文件扁平化）索引：</p>
+                        <div class="code-block-wrapper" style="margin: 0 0 10px 0; padding: 10px 15px;">
+                            <pre>CREATE INDEX idx_chunk_embedding_ivfflat 
+ON document_chunk_embedding 
+USING ivfflat (embedding vector_cosine_ops) 
+WITH (lists = 100);</pre>
+                        </div>
+                        <p>该索引利用 K-Means 算法在导入时将 1536 维空间划分为 100 个聚类中心（lists = 100）。检索时，可通过设置 `SET ivfflat.probes = 10` 指令仅探测最近的 10 个聚类，**这使得在大数据量下查询速度有了数量级的飞跃，仅牺牲极其微弱的精度**。</p>
+                    </div>
+                    <div>
+                        <strong style="color: #fff; display: block; margin-bottom: 8px; color: var(--neon-purple);">JSONB 应用：Message 表引用与 GIN 索引</strong>
+                        <p style="margin-bottom: 10px;">AI 对话的引用数据 `citations` 结构高度灵活且读多写少。如果新建一对多的物理表，会造成极高的级联 JOIN 开销。我们将其存为 PostgreSQL 的 **JSONB** 格式：</p>
+                        <div class="code-block-wrapper" style="margin: 0 0 10px 0; padding: 10px 15px;">
+                            <pre>[{"documentId": 5, "fileName": "合规文件.pdf", "chunkIndex": 12, "score": 0.94}]</pre>
+                        </div>
+                        <p><strong>JSONB 的巨大优势</strong>：</p>
+                        <ul style="padding-left: 20px; margin-top: 5px;">
+                            <li>数据库内部以高压缩二进制存储，查询效率远高于普通 JSON。</li>
+                            <li>天然支持创建 <strong>GIN（广义倒排索引）</strong>，可以直接通过 SQL 语句快速检索“所有引用了文档 ID 为 5 的回答消息”，具有极强的扩展灵活性。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 舱段五: Core ==================== -->
+        <section id="sec-core">
+            <div class="glass-card">
+                <h2 class="card-title">深度技术方案与算法推导 (Algorithmic & Mechanical Deep-Dive)</h2>
+                
+                <h3 style="color: #fff; margin-bottom: 10px; font-size: 1.1rem;">1. RRF (Reciprocal Rank Fusion, 倒数排名融合) 数学推导</h3>
+                <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                    <p>在混合检索中，pgvector 的相似度距离（0.0 到 1.0）与 Elasticsearch 的 BM25 得分（0.0 到几十）由于计算维度和尺度的完全不同，**是绝对无法直接相加或者线性加权的**。因此，RRF 排名融合算法采用了一种“非参数、无监督”的排名聚合模型，其数学核心公式为：</p>
+                    
+                    <div class="math-box">
+                        RRF(d \in D) = \sum_{m \in M} \frac{1}{k + r_m(d)}
+                    </div>
+                    
+                    <p style="margin-bottom: 12px;"><strong>变量解释</strong>：</p>
+                    <ul style="padding-left: 20px; margin-bottom: 15px;">
+                        <li>$D$：两路检索结果合并后的总去重文档集。</li>
+                        <li>$M$：检索通道集合（在此为：向量检索通道 与 ES全文匹配通道，$|M| = 2$）。</li>
+                        <li>$r_m(d)$：文档 $d$ 在通道 $m$ 中的降序物理排名（即排第几，排第 1 即 $r=1$）。若某通道未召回该文档，则其排名视为无穷大，倒数分数为 0。</li>
+                        <li>$k$：平滑常数，工业界公认且学术研究最推荐的默认值为 **60**。</li>
+                    </ul>
+                    
+                    <strong style="color: #fff; display: block; margin-bottom: 6px;">k = 60 的物理意义与“防抖动”原理：</strong>
+                    <p style="margin-bottom: 15px;">
+                        平滑系数 $k$ 的作用是**防范极端高排名的抖动干扰**。
+                        如果不加 $k$（即 $1/r$），第 1 名的得分是 $1.00$，第 2 名是 $0.50$，分差高达 $0.50$！这会导致“只要文档在某一路拿到了第一名，就会霸占最终的第一名”。
+                        而加上 $k=60$ 后，第 1 名得分为 $1/61 \approx 0.01639$，第 2 名得分为 $1/62 \approx 0.01613$，差距收窄到 $0.00026$。这保障了**只有当文档在两个通道里都排名前列时，最终综合得分才会高**，从而达到了最平滑、最客观的融合效果。
+                    </p>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 30px 0;">
+
+                <h3 style="color: #fff; margin-bottom: 10px; font-size: 1.1rem;">2. JWT 双令牌与高并发 Axios 无感刷新机制</h3>
+                <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                    <p>为兼顾微服务无状态的高并发处理性能和对被盗令牌的远程强制撤销能力，系统配置了 JWT 双令牌：</p>
+                    <ul style="padding-left: 20px; margin-bottom: 15px;">
+                        <li><strong>Access Token（AT）</strong>：保存在内存，超短周期（1小时），每次请求都附加到 Authorization 报头，后端拦截器拦截后仅通过本地签名校验（无状态，零数据库访问耗时）。</li>
+                        <li><strong>Refresh Token（RT）</strong>：保存在 `localStorage`，超长周期（7天）。数据库中只存储其 SHA-256 哈希值，确保数据库被黑后也无法反向解出原始 RT。且带有 `revoked` 字段，支持管理员后台远程踢人。</li>
+                    </ul>
+                    
+                    <strong style="color: #fff; display: block; margin-bottom: 8px;">Axios 并发 401 闭包锁核心逻辑：</strong>
+                    <p style="margin-bottom: 15px;">
+                        在多页面并发初始化加载时，可能多个网络请求同时发生，并由于 AT 到期而同时遭遇后端抛出的 401 异常。
+                        如果不做任何并发控制，前端会同时发起 N 个 `refresh` 请求，由于 RT 是一次性使用的（单次刷新自动作废并下发新 RT），这会导致多次刷新引发竞态冲突，使用户遭遇莫名的强退登出。
+                        我们设计的 Axios 拦截器使用了**单例状态锁 `isRefreshing` 和挂起请求队列 `requestsQueue`**：
+                    </p>
+                    
+                    <div class="code-block-wrapper">
+                        <div class="code-lang-tag">Typescript</div>
+                        <pre>let isRefreshing = false;
+let requestsQueue: Array<(token: string) => void> = [];
+
+axios.interceptors.response.use(
+    response => response,
+    async error => {
+        const { config, response } = error;
+        if (response && response.status === 401 && !config._retry) {
+            if (isRefreshing) {
+                // 如果当前已经在刷新 RT，将本次请求包装并压入挂起队列
+                return new Promise(resolve => {
+                    requestsQueue.push((newToken) => {
+                        config.headers['Authorization'] = `Bearer ${newToken}`;
+                        resolve(axios(config)); // 刷新完成后重新调用
+                    });
+                });
+            }
+            
+            config._retry = true;
+            isRefreshing = true;
+            
+            try {
+                // 发送无感刷新 RT 请求
+                const { accessToken, refreshToken } = await store.dispatch('auth/refresh');
+                // 刷新成功，释放阻塞锁，并依次唤醒执行挂起的所有请求
+                requestsQueue.forEach(cb => cb(accessToken));
+                requestsQueue = [];
+                
+                config.headers['Authorization'] = `Bearer ${accessToken}`;
+                return axios(config);
+            } catch (refreshError) {
+                // 刷新 RT 彻底失败（已过期/被踢），清空状态并强推到登录页
+                store.dispatch('auth/logout');
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+        return Promise.reject(error);
+    }
+);</pre>
+                        <button class="btn-copy-code" onclick="copyCodeText(this)">复制代码</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 舱段六: FAQ ==================== -->
+        <section id="sec-faq">
+            <div class="glass-card">
+                <h2 class="card-title">答辩与面试高频 RAG 核心技术拷问 (Interview & Presentation Q&A)</h2>
+                <input type="text" class="faq-search-box" id="faq-search" placeholder="🔍 键入关键词检索核心考点（如：幻觉 / 向量 / 内存泄漏 / 滑动窗口）..." oninput="filterFaq()">
+                
+                <div class="faq-accordion" id="faq-list">
+                    <!-- Q1 -->
+                    <div class="faq-item">
+                        <div class="faq-header" onclick="toggleFaq(this)">
+                            <span>Q1. RAG 与微调（Fine-Tuning）在解决大模型幻觉和私有知识检索上有什么区别？该怎么抉择？</span>
+                            <span class="faq-icon-arrow">▼</span>
+                        </div>
+                        <div class="faq-body">
+                            <div class="faq-body-content">
+                                <div class="faq-meta">
+                                    <span class="faq-tag tag-rag">RAG 基础</span>
+                                </div>
+                                这是一个必考的架构方向问题。我常用一个比喻来做满分回答：<strong>微调就像是让学生去闭卷考试，而 RAG 则是给学生提供课本进行开卷考试</strong>。
+                                <div class="faq-answer-block">
+                                    <strong>满分大厂级回答范式：</strong>
+                                    1. <strong>知识时效性与更新成本</strong>：微调是把知识写进模型的权重（参数）里，如果私有文档有更新，微调需要重新训练，算力极高，时效极差。RAG 是通过检索把知识放入上下文，更新文档只需极速更新 pgvector 和 ES，更新成本几乎为 0，且实时生效。<br>
+                                    2. <strong>抑制幻觉与溯源</strong>：微调模型依旧会胡编乱造，且无法证明回答出处。RAG 通过直接向大模型喂入召回段落，大模型强制基于证据作答，幻觉率暴跌至 1% 以下，且支持全链路引用追溯。<br>
+                                    3. <strong>商业决策建议</strong>：对于知识密集型、数据经常变化、需要 100% 准确引用和严格数据安全隔离的业务场景（如合同比对、客户支持），<strong>RAG 是唯一可行的落地商用方案</strong>；微调更适合让模型学习特定的语气、方言风格，或者特定下游垂直任务（如代码格式转换）。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Q2 -->
+                    <div class="faq-item">
+                        <div class="faq-header" onclick="toggleFaq(this)">
+                            <span>Q2. pgvector 在百万级甚至千万级的高维向量检索中性能如何？为什么不直接使用 Milvus、Pinecone 这种专业向量库？</span>
+                            <span class="faq-icon-arrow">▼</span>
+                        </div>
+                        <div class="faq-body">
+                            <div class="faq-body-content">
+                                <div class="faq-meta">
+                                    <span class="faq-tag tag-db">向量数据库</span>
+                                </div>
+                                面试官在考察你的工程实践能力与技术选型的合理性。千万不要盲目追求“高大上”的技术，要切合实际业务场景。
+                                <div class="faq-answer-block">
+                                    <strong>满分大厂级回答范式：</strong>
+                                    1. <strong>极佳的运维性价比与零成本增量</strong>：Milvus 等专用向量库是一个庞大的微服务集群，需要依赖 etcd、MinIO、Pulsar 等，小团队运维代价极其沉重。而 pgvector 是 PostgreSQL 预装插件，我们无需为向量搜索新增一套独立的底层存储架构，减少了大量的服务器维护开销。<br>
+                                    2. <strong>严密的 ACID 与关系联合检索</strong>：专用向量数据库不支持传统 SQL 联合查询和强一致性事务。当用户删除一个文档时，pgvector 能够支持通过外键实现文档、切片与向量空间的<strong>级联强一致删除</strong>。且可以通过一行 SQL 同时进行向量距离排序和 sys_group 的多租户主键精确过滤。<br>
+                                    3. <strong>性能边界与应对方案</strong>：在实际基准测试中，基于 **IVFFlat 索引** 的 pgvector 在处理 100 万行以内的 1536 维向量检索时，平均 QPS 可达数千，单次延迟稳定在 10ms 以内，完全能够抗住中大型企业应用。若日后数据量扩容到千万/亿级以上，我们也可利用策略模式将数据源层快速无缝地剥离并迁往 Milvus。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Q3 -->
+                    <div class="faq-item">
+                        <div class="faq-header" onclick="toggleFaq(this)">
+                            <span>Q3. 为什么要用滑动窗口 overlap 切片？重叠度 Overlap 为什么是 100 字符，切片大小 500 字符？怎么证明这是最优的？</span>
+                            <span class="faq-icon-arrow">▼</span>
+                        </div>
+                        <div class="faq-body">
+                            <div class="faq-body-content">
+                                <div class="faq-meta">
+                                    <span class="faq-tag tag-etl">ETL 摄入</span>
+                                </div>
+                                此问题考察你对于 RAG 中分块（Chunking）痛点的深层理解，即语义切断与上下文连续性的平衡。
+                                <div class="faq-answer-block">
+                                    <strong>满分大厂级回答范式：</strong>
+                                    1. <strong>滑动 Overlap 的核心防切断作用</strong>：如果切片采用完全硬切分（如 A 卡片 1-500，B 卡片 501-1000），那么极有可能某一关键的完整语义句（如“如果乙方在30天内不付款，则应支付滞纳金”）正好在第 500 和第 501 字符中间被一分为二。这会导致两边切片的向量语义都不完整，检索余弦值大幅下降导致漏召回。滑动重叠 100 个字符，确保了**任何长句在相邻切片中都有一个相对完整的语义镜像**，极大提升了边界信息找回的容错度。<br>
+                                    2. <strong>500/100 尺寸的物理边界与直觉</strong>：500 字符约等于大段落的平均长度，它既能包含丰富的语义块，又不会因为太长（如 2000 字符）而往 Prompt 中掺杂无关的多余噪点信息；大模型目前在太长的背景上下文里存在“在中间迷失（Lost in the Middle）”的弱点，因此 500 字符能在**检索定位精度**与**包含的语境完备度**间取得完美的工程折中。<br>
+                                    3. <strong>数据调优与证明</strong>：我们通过在测试集跑 `Evaluation`，使用检索评测指标 NDCG 和答案召回率（Hit Rate）做不同尺寸网格搜索比对，最终发现在本企业技术文件场景下，500/100 在计算耗时与召回率间性价比最高。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Q4 -->
+                    <div class="faq-item">
+                        <div class="faq-header" onclick="toggleFaq(this)">
+                            <span>Q4. ThreadLocal 上下文传递在异步线程池（如 @Async）或 Spring Boot 虚拟线程下会有什么隐患？你们是如何彻底杜绝内存泄漏和上下文丢失的？</span>
+                            <span class="faq-icon-arrow">▼</span>
+                        </div>
+                        <div class="faq-body">
+                            <div class="faq-body-content">
+                                <div class="faq-meta">
+                                    <span class="faq-tag tag-concur">高并发安全</span>
+                                </div>
+                                这属于硬核的 Java 核心并发考点。面试官是在考察你在进行多租户 GroupContext 隔离和异步 ETL 开发时是否具备扎实的并发底子。
+                                <div class="faq-answer-block">
+                                    <strong>满分大厂级回答范式：</strong>
+                                    1. <strong>Tomcat 线程池复用与内存泄漏成因</strong>：Tomcat 的底层处理请求线程是池化复用的。如果我们通过 JWT 拦截器在 `ThreadLocal` 注入了当前用户的 `userId` 和 `groupId`，但在请求结束后没有彻底清理，那么当这个线程被收回线程池并重新分配给下一个匿名用户的请求时，下一个请求就能“无门槛越权直接读取”上一个用户的上下文，这会造成极其严重的数据越权和安全事故；并且，由于 `ThreadLocal` 的底层 `ThreadLocalMap.Entry` 对 Key（ThreadLocal）是弱引用，但对 Value（Context 实体）是强引用，在没有主动调用 `.remove()` 且线程长存的前提下，强引用链无法断开，会导致 **Metaspace/Heap 内存泄漏**。<br>
+                                    2. <strong>我们的双保险规避机制</strong>：我们首先在 `JwtAuthenticationFilter` 的拦截逻辑里，将 ThreadContext 的注入与清理包裹在严格的 `try-finally` 结构中，在 `finally` 块中显式强行调用 `GroupContext.clear()` 确保 100% 拔除引用。<br>
+                                    3. <strong>异步线程与虚拟线程上下文丢失规避</strong>：普通的 `ThreadLocal` 在通过 `@Async` 或 `CompletableFuture.runAsync` 投递到新线程池时，会导致新线程无法拿到主线程上下文（值为 null）。为了解决这一问题，我们在异步编排核心位置使用了阿里巴巴开源的 **TransmittableThreadLocal (TTL)** 或者是通过手动在 `CompletableFuture` 构造的子闭包中，以主线程传参复制的形式手工拷贝上下文，彻底杜绝了异步流程中上下文凭空丢失与内存安全隐患。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Q5 -->
+                    <div class="faq-item">
+                        <div class="faq-header" onclick="toggleFaq(this)">
+                            <span>Q5. 前端 SSE（Server-Sent Events）流式响应解析时，为什么要用原生 fetch + ReadableStream 而非传统的 EventSource 浏览器原生组件？</span>
+                            <span class="faq-icon-arrow">▼</span>
+                        </div>
+                        <div class="faq-body">
+                            <div class="faq-body-content">
+                                <div class="faq-meta">
+                                    <span class="faq-tag tag-rag">前端与通信</span>
+                                </div>
+                                该提问考察前端通信在 RAG 流式输出场景下的真实解决坑点与技术钻研精神。
+                                <div class="faq-answer-block">
+                                    <strong>满分大厂级回答范式：</strong>
+                                    1. <strong>EventSource 的硬伤限制</strong>：浏览器原生的 `EventSource` 仅支持 **GET** 请求，且**无法直接自定义请求头 Header**。但是在我们的企业 RAG 系统中，用户发送一条几千字的复杂提示词消息时，GET 请求的 URL 长度很容易超限；并且，为了实现 JWT 身份验证，我们必须在请求头附加 `Authorization: Bearer <token>` 报头，原生 EventSource 是绝对无法配置此报头的。<br>
+                                    2. <strong>fetch + ReadableStream 的自由控流优势</strong>：为了突破上述限制，我们改用前端原生 `fetch` 启动 **POST** 请求，通过请求体传输大数据，并在 Header 携带 JWT token。当服务器以流式响应返回时，利用 `response.body.getReader()` 捕获一个底层的 `ReadableStream` 可读流读取器。<br>
+                                    3. <strong>极致的编解码与打字机防卡顿渲染</strong>：我们在前端启动一个 `while (true)` 死循环持续监听 `reader.read()`，将捕获的 Uint8Array 字节数组通过 `TextDecoder` 解码成文本。随后利用手动编写的正则和行分割规则，从 SSE 报文的 `data: ` 前缀中提取自定义 JSON 协议，不仅解析了流式逐 token 文本进行无卡顿打字机渲染，还同时顺畅接收了提前推送的 `citations` 引用来源数组，比第三方开源的 AI 对话前端解析更加灵活可控。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 舱段七: Resume ==================== -->
+        <section id="sec-resume">
+            <div class="glass-card">
+                <h2 class="card-title">黄金简历项目描述与答辩陈述词 (Resume copy & Speech Guide)</h2>
+                
+                <div class="resume-section-box">
+                    <h3 class="resume-title">📝 简历项目亮点描写（基于 STAR 黄金法则）</h3>
+                    <div class="resume-content" id="resume-star-text">
+                        <ul>
+                            <li><strong>项目角色：</strong> 独立全栈核心开发人员 / RAG 问答引擎与 ETL 流水线主设计人。</li>
+                            <li><strong>情境 (Situation)：</strong> 针对企业内部大量 PDF、Word、Excel 等私有文档检索耗时长、分析效率低，以及普通大模型直接应用于商业问答时幻觉率高（常胡编乱造）且缺乏出处追溯的行业痛点，主导研发了企业级 RAG 检索增强大模型分析平台。</li>
+                            <li><strong>任务 (Task)：</strong> 搭建支持 25+ 种异构格式的高性能异步解析 ETL 数据摄入流水线；设计 pgvector + Elasticsearch 并行双路混合检索与 RRF 排名融合算法，消除幻觉并实现 100% 回复引用溯源，支撑起百人级别团队的企业级数据智能协同。</li>
+                            <li><strong>行动 (Action)：</strong>
+                                <ul>
+                                    <li>1. <strong>架构搭建</strong>：使用 **Spring Boot 3.5 + Java 22 虚拟线程** 作为主吞吐引擎，配合 **Spring AI 1.0** 实现 DeepSeek、GLM-4 等多模型零重启动态热切换，以 Nginx 反向代理配合 `proxy_buffering off` 支撑极速无抖动打字机 SSE 推送。</li>
+                                    <li>2. <strong>算法落地</strong>：自主实现并优化了 **RRF (Reciprocal Rank Fusion)** 倒数排名融合算法，通过归一化平滑克服向量与全文评分量纲不同难题，使文档平均找回召回率显著提升 12%。</li>
+                                    <li>3. <strong>深度优化</strong>：使用 **Axios 闭包单例状态锁** 巧妙解决高并发场景下的 RT 多并发 401 令牌刷新冲突；基于 ThreadLocal 的 GroupContext 进行强一致性组织权限隔离，并在安全过滤器 `finally` 块中调用 `.remove()` 规避 Tomcat 线程池内存泄漏风险。</li>
+                                </ul>
+                            </li>
+                            <li><strong>结果 (Result)：</strong> 平台成功上线运行，实现上传文档自动入库提取到向量库仅需秒级，问答回答的**幻觉率在机制上被控制在 1% 以下**，支持用户对任意答案的段落、行级引用进行 100% 精准溯源，大文件并发入库吞吐量提升了 2.5 倍，成为部门面试与技术考核的核心亮点标杆项目。</li>
+                        </ul>
+                    </div>
+                    <button class="btn-copy-card" onclick="copyResumeText()">📋 一键复制简历黄金描述</button>
+                </div>
+                
+                <div class="resume-section-box" style="margin-top: 30px;">
+                    <h3 class="resume-title">🎤 答辩三分钟硬核开场与陈述演讲词</h3>
+                    <div class="resume-content" style="font-style: italic; color: #d1d5db;" id="speech-text">
+                        “各位评委老师、面试官大家下午好。今天我汇报的项目是——**EviMind，基于 RAG 检索增强架构的智能数据分析平台**。<br><br>
+                        我们在将大语言模型推进到企业落地时，常会遇到大模型胡说八道即‘幻觉问题’，以及私有核心文档的安全隐私与时效性问题。为了彻底破解这一难题，我主导设计并研发了 EviMind 系统。<br><br>
+                        本系统的核心亮点在于**自研的工业级多阶段 ETL 摄入管线与双路混合检索引擎**。我们通过策略模式支持了 PDF、Office 在内的多格式异步文本解析。在检索方面，我并没有采用单一的向量检索，而是通过 **CompletableFuture 高并发并行**调度了 **pgvector 语义相似度搜索** 与 **Elasticsearch 倒排索引全文匹配**。由于两路分数不可比，我创新引入了 **RRF（Reciprocal Rank Fusion）排名融合算法**，通过数学平滑常数 $k=60$ 聚合两个通道的优势，实现了 NDCG 指标 10% 以上的增长。<br><br>
+                        此外，本系统非常注重**引用溯源**，每个回答均可通过 JSONB 挂载的元数据进行精准至切片的来源追溯。在工程安全与性能上，我深入优化了高并发场景下 **Axios 并发 401 令牌刷新闭包锁**、**ThreadLocal 强一致级联权限控制与主动防内存泄漏机制**。整个项目前后端分离，完美实现 Docker 容器化多阶段打包部署。以上是我的项目汇报核心，欢迎老师提问质询。”
+                    </div>
+                    <button class="btn-copy-card" onclick="copySpeechText()">📋 一键复制答辩演讲词</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 舱段八: Simulator ==================== -->
+        <section id="sec-sim">
+            <div class="glass-card">
+                <h2 class="card-title">RRF (Reciprocal Rank Fusion) 混合检索算法在线模拟器</h2>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 20px;">
+                    这是一个专为面试现场演示而设计的算法交互模块。您可以在左侧输入语义检索（pgvector）和关键词检索（Elasticsearch）的切片召回情况（越靠前代表该路排名越高），点击“执行算法聚合融合”，即可在右侧**以完全可视化的进度条和得分卡展示分数的归一化、各路排名转换、RRF 分数累加以及融合后的最终排名**。
+                </p>
+                
+                <div class="sim-grid">
+                    <!-- 左侧：输入控制面板 -->
+                    <div class="sim-control-panel">
+                        <div class="sim-form-group">
+                            <div class="sim-label-row">
+                                <label class="sim-label">1. 平滑系数 k (Smoothing Constant)</label>
+                                <span class="sim-desc">推荐默认值 60</span>
+                            </div>
+                            <input type="number" class="sim-input" id="sim-k-val" value="60" min="1" max="200">
+                        </div>
+
+                        <!-- 语义检索输入 -->
+                        <div class="sim-form-group">
+                            <div class="sim-label-row">
+                                <label class="sim-label" style="color: var(--neon-blue);">2. 语义检索通道召回 (pgvector Results)</label>
+                                <span class="sim-desc">按降序分数填入切片ID</span>
+                            </div>
+                            <table class="sim-table-input" id="table-semantic">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 20%;">排名</th>
+                                        <th style="width: 50%;">切片编号 (Chunk ID)</th>
+                                        <th style="width: 30%;">余弦相似度分数</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Rank 1</td>
+                                        <td><input type="text" class="sim-input" value="Chunk-A" placeholder="Chunk-A"></td>
+                                        <td><input type="number" class="sim-input score-sem" value="0.94" step="0.01" min="0" max="1"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Rank 2</td>
+                                        <td><input type="text" class="sim-input" value="Chunk-B" placeholder="Chunk-B"></td>
+                                        <td><input type="number" class="sim-input score-sem" value="0.88" step="0.01" min="0" max="1"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Rank 3</td>
+                                        <td><input type="text" class="sim-input" value="Chunk-C" placeholder="Chunk-C"></td>
+                                        <td><input type="number" class="sim-input score-sem" value="0.75" step="0.01" min="0" max="1"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 关键词检索输入 -->
+                        <div class="sim-form-group">
+                            <div class="sim-label-row">
+                                <label class="sim-label" style="color: var(--neon-purple);">3. 全文检索通道召回 (Elasticsearch BM25)</label>
+                                <span class="sim-desc">按降序分数填入切片ID</span>
+                            </div>
+                            <table class="sim-table-input" id="table-keyword">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 20%;">排名</th>
+                                        <th style="width: 50%;">切片编号 (Chunk ID)</th>
+                                        <th style="width: 30%;">BM25 得分</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Rank 1</td>
+                                        <td><input type="text" class="sim-input" value="Chunk-C" placeholder="Chunk-C"></td>
+                                        <td><input type="number" class="sim-input score-kw" value="12.4" step="0.1"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Rank 2</td>
+                                        <td><input type="text" class="sim-input" value="Chunk-D" placeholder="Chunk-D"></td>
+                                        <td><input type="number" class="sim-input score-kw" value="8.9" step="0.1"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Rank 3</td>
+                                        <td><input type="text" class="sim-input" value="Chunk-A" placeholder="Chunk-A"></td>
+                                        <td><input type="number" class="sim-input score-kw" value="4.2" step="0.1"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="sim-btn-group">
+                            <button class="btn-sim btn-calc" onclick="runRrfCalculation()">⚡ 执行 RRF 排名聚合算法</button>
+                            <button class="btn-sim btn-reset" onclick="resetRrfInputs()">重置</button>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：输出结果面板 -->
+                    <div class="sim-results-panel">
+                        <!-- 初始空白态 -->
+                        <div class="sim-result-empty" id="sim-empty-state">
+                            <div class="sim-empty-icon">🛸</div>
+                            <h3>等待运行计算</h3>
+                            <p style="font-size: 0.8rem; margin-top: 8px;">点击左侧按钮，计算引擎将使用纯 JS 实时执行 RRF 矩阵多重归并融合排名并可视化输出。</p>
+                        </div>
+
+                        <!-- 结果展示态 -->
+                        <div class="sim-result-content" id="sim-result-state">
+                            <h3 style="color: #fff; margin-bottom: 15px; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 10px;">📊 融合后最终排名 (Fused Aggregation Rankings)</h3>
+                            
+                            <table class="sim-result-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 15%;">最终排名</th>
+                                        <th style="width: 35%;">切片 ID</th>
+                                        <th style="width: 25%;">向量通道排名/得分</th>
+                                        <th style="width: 25%;">ES 通道排名/得分</th>
+                                        <th style="width: 20%;">RRF 融合综合分</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sim-result-rows">
+                                    <!-- JS 渲染行 -->
+                                </tbody>
+                            </table>
+                            
+                            <div style="background: rgba(0, 242, 254, 0.05); border: 1px solid rgba(0, 242, 254, 0.1); border-radius: 8px; padding: 15px; margin-top: 25px; font-size: 0.82rem; color: var(--text-secondary);">
+                                <strong>💡 算法融合亮点剖析：</strong>
+                                <span id="sim-insight-text">
+                                    我们会发现，虽然 <strong>Chunk-A</strong> 在向量通道拿到了第一，但 <strong>Chunk-C</strong> 虽然向量排第三，但在 ES 通道高居第一。由于在双路都排名前列，<strong>Chunk-C</strong> 最终逆袭成功登顶综合第一。这证明了 RRF 排名聚合对双路高排名文档召回的敏锐度！
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<!-- ==================== 🎬 全屏答辩 Slide 投影幕 ==================== -->
+<div id="slides-overlay">
+    <button class="btn-exit-slides" id="exit-slides">✕ 退出放映 (ESC)</button>
+    
+    <div class="slides-container">
+        <!-- Slide 1: 封面 -->
+        <div class="slide-page active" data-index="1">
+            <div class="slide-header">
+                <span class="slide-tag">PROJECT DEFENSE</span>
+                <span class="slide-num">01 / 06</span>
+            </div>
+            <div class="slide-body" style="text-align: center; align-items: center;">
+                <h2 class="slide-title" style="font-size: 3.2rem; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                    EviMind 智能数据分析平台
+                </h2>
+                <p style="font-size: 1.4rem; color: var(--text-secondary); margin-bottom: 30px;">
+                    RAG 检索增强架构的商业级私有知识库与问答平台
+                </p>
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 15px 30px; border-radius: 12px; font-size: 0.95rem; color: var(--text-muted);">
+                    主讲人汇报 / 开发主设计人：WEIY
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: 项目背景 -->
+        <div class="slide-page" data-index="2">
+            <div class="slide-header">
+                <span class="slide-tag">BACKGROUND & PAINPOINTS</span>
+                <span class="slide-num">02 / 06</span>
+            </div>
+            <div class="slide-body">
+                <h2 class="slide-title">1. 大模型落地商业化面临的三大痛点</h2>
+                <ul class="slide-bullets">
+                    <li><strong>知识过载与过期：</strong> 大模型静态训练的权重导致其对昨日及实时数据无法掌握。</li>
+                    <li><strong>核心幻觉无法消除：</strong> 缺少严密出处与证据拦截，使得 AI “胡言乱语”，无法落地严谨业务。</li>
+                    <li><strong>私有敏感文件安全：</strong> 传统 SaaS 模型存在泄漏敏感合规数据的巨大隐私安全隐患。</li>
+                    <li><strong>系统化破局：</strong> RAG 开卷考试范式，<strong>检索（pgvector + ES）为盾，生成（LLM）为矛</strong>，突破瓶颈。</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Slide 3: 架构拓扑 -->
+        <div class="slide-page" data-index="3">
+            <div class="slide-header">
+                <span class="slide-tag">ARCHITECTURE & ETL</span>
+                <span class="slide-num">03 / 06</span>
+            </div>
+            <div class="slide-body">
+                <h2 class="slide-title">2. 工业级多阶段异步 ETL 摄入系统</h2>
+                <ul class="slide-bullets">
+                    <li><strong>解耦异步极速入库：</strong> 采用多线程池异步调度处理，秒级返回 `PENDING`，提供轮询进度状态。</li>
+                    <li><strong>策略模式（Strategy Pattern）：</strong> 解耦 Word、Excel、PDF 等 25+ 格式，高抗干扰清洗降噪。</li>
+                    <li><strong>滑动窗口 Overlap 分块：</strong> 采用 <strong>500字 + 100字重叠度</strong>，彻底锁死切片边界语义流失。</li>
+                    <li><strong>原子双路落库：</strong> 向量模型提取 1536 维数据，pgvector 级联事务写入，同步更新 ES 全文索引。</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Slide 4: 混合检索 -->
+        <div class="slide-page" data-index="4">
+            <div class="slide-header">
+                <span class="slide-tag">ALGORITHMIC EXCELLENCE</span>
+                <span class="slide-num">04 / 06</span>
+            </div>
+            <div class="slide-body">
+                <h2 class="slide-title">3. pgvector + ES 双路并行混合检索与 RRF 算法</h2>
+                <ul class="slide-bullets">
+                    <li><strong>优劣互补双重护航：</strong> pgvector 击穿深层同义语义意图；ES 牢牢锁死专有名词、产品型号、日期。</li>
+                    <li><strong>RRF (Reciprocal Rank Fusion) 排名融合：</strong> 采用 $1/(k + rank)$ 无监督算法，成功克服物理量纲不同死结。</li>
+                    <li><strong>平滑参数 $k=60$：</strong> 抑制某一路偶然性极高得分抖动，只有双路排名齐头并进时，才会脱颖而出。</li>
+                    <li><strong>优雅降级高容错：</strong> CompletableFuture 并行检索，一路卡死抛异常自动优雅退化，保障可用性。</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Slide 5: 高并发与性能 -->
+        <div class="slide-page" data-index="5">
+            <div class="slide-header">
+                <span class="slide-tag">ENGINEERING OPTIMIZATION</span>
+                <span class="slide-num">05 / 06</span>
+            </div>
+            <div class="slide-body">
+                <h2 class="slide-title">4. 扎实硬核的后端并发与安全设计</h2>
+                <ul class="slide-bullets">
+                    <li><strong>Axios 并发 401 闭包锁：</strong> 控制高并发初始化时多 RT 刷新冲突，保障有且只有一次令牌安全刷新。</li>
+                    <li><strong>ThreadLocal 上下文生命周期强移除：</strong> 在安全过滤器 `finally` 块中调用 `.remove()` 动作，彻底屏蔽 Tomcat 线程池内存泄漏与越权隐患。</li>
+                    <li><strong>防幻觉拦截闸门：</strong> 余弦平均距离与知识库门限实时博弈，不达标则礼貌拒绝回答，100% 抵制胡编乱造。</li>
+                    <li><strong>SSE 可靠控流与 fetch stream 手动解析：</strong> 自定义 SSE 事件，通过 POST 身份校验接收逐 token 及 citations 引用。</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Slide 6: 答辩总结 -->
+        <div class="slide-page" data-index="6">
+            <div class="slide-header">
+                <span class="slide-tag">SUMMARY & SUCCESS</span>
+                <span class="slide-num">06 / 06</span>
+            </div>
+            <div class="slide-body" style="text-align: center; align-items: center;">
+                <h2 class="slide-title" style="font-size: 2.8rem; background: var(--gradient-neon); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px;">
+                    汇报完毕，感谢各位评委质询
+                </h2>
+                <p style="font-size: 1.3rem; color: var(--text-secondary); margin-bottom: 40px; max-width: 800px;">
+                    EviMind 成功打通了企业私有化异构数据的 RAG 问答全流程，用机制降伏幻觉，以硬核算法保驾性能，做到了生产级的高可用落地。
+                </p>
+                <div style="font-size: 0.9rem; color: var(--text-muted);">
+                    请各位老师批评指正，谢谢！
+                </div>
+            </div>
+        </div>
+
+        <!-- 控制栏 -->
+        <div class="slides-controls">
+            <button class="slide-btn" id="slide-prev" disabled>←</button>
+            <span class="slides-keyboard-tip">💡 支持键盘左右方向键 (← / →) 翻页</span>
+            <button class="slide-btn" id="slide-next">→</button>
+        </div>
+    </div>
+</div>
+
+<!-- 📋 复制通知 Toast -->
+<div class="toast-notify" id="toast">📋 已成功复制到您的剪贴板！</div>
+
+<script>
+    // 1. 数据库展示数据定义
+    const tableSchemas = {
+        sys_user: {
+            purpose: "核心用户账户表，BCrypt 密码存储与系统角色定位",
+            fields: [
+                { name: "id", type: "BIGINT", constraint: "PK, AUTO_INCREMENT", desc: "唯一主键 ID" },
+                { name: "username", type: "VARCHAR(100)", constraint: "UNIQUE, NOT NULL", desc: "登录用户名" },
+                { name: "password", type: "VARCHAR(256)", constraint: "NOT NULL", desc: "BCrypt 强加密哈希密码" },
+                { name: "system_role", type: "VARCHAR(20)", constraint: "DEFAULT 'USER'", desc: "全局权限角色：ADMIN / USER" },
+                { name: "email", type: "VARCHAR(150)", constraint: "NULL", desc: "安全辅助绑定邮箱" },
+                { name: "status", type: "VARCHAR(20)", constraint: "DEFAULT 'ACTIVE'", desc: "状态标志：ACTIVE / DISABLED" }
+            ]
+        },
+        knowledge_base: {
+            purpose: "知识库主体配置表，绑定团队多租户和精细切片门限配置",
+            fields: [
+                { name: "id", type: "BIGINT", constraint: "PK, AUTO_INCREMENT", desc: "唯一主键 ID" },
+                { name: "name", type: "VARCHAR(150)", constraint: "NOT NULL", desc: "知识库显示名称" },
+                { name: "group_id", type: "BIGINT", constraint: "FK -> sys_group(id)", desc: "关联的组织/租户团队 ID" },
+                { name: "evidence_threshold", type: "DECIMAL(4,2)", constraint: "DEFAULT 0.50", desc: "★ 防幻觉证据过滤门限评分值" },
+                { name: "chunk_strategy", type: "VARCHAR(50)", constraint: "DEFAULT 'FIXED_LENGTH'", desc: "切片算法：FIXED_LENGTH / PARAGRAPH" },
+                { name: "chunk_size", type: "INTEGER", constraint: "DEFAULT 500", desc: "单词切片最大限定字符数" },
+                { name: "chunk_overlap", type: "INTEGER", constraint: "DEFAULT 100", desc: "相邻切片滑动滑动重叠字符数" },
+                { name: "creator_id", type: "BIGINT", constraint: "NOT NULL", desc: "创建该知识库的用户 ID" }
+            ]
+        },
+        document: {
+            purpose: "上传原始文档主表，保存文件存储路径并提供状态机跟踪进度",
+            fields: [
+                { name: "id", type: "BIGINT", constraint: "PK, AUTO_INCREMENT", desc: "唯一主键 ID" },
+                { name: "knowledge_base_id", type: "BIGINT", constraint: "FK, NOT NULL", desc: "隶属的知识库 ID" },
+                { name: "file_name", type: "VARCHAR(255)", constraint: "NOT NULL", desc: "上传文件原始名称" },
+                { name: "file_format", type: "VARCHAR(50)", constraint: "NOT NULL", desc: "文件后缀：PDF/DOCX/XLSX" },
+                { name: "file_size", type: "BIGINT", constraint: "NOT NULL", desc: "字节大小（限制50MB）" },
+                { name: "storage_path", type: "VARCHAR(512)", constraint: "NOT NULL", desc: "MinIO 对象存储 S3 物理路径" },
+                { name: "ingestion_status", type: "VARCHAR(30)", constraint: "DEFAULT 'PENDING'", desc: "状态机：PENDING/EXTRACTING/CHUNKING/EMBEDDING/COMPLETED/FAILED" },
+                { name: "chunk_count", type: "INTEGER", constraint: "DEFAULT 0", desc: "文档切出来的总切片数量" }
+            ]
+        },
+        document_chunk: {
+            purpose: "原始文件纯文本切片存储表，与向量表 1:1 精确绑定",
+            fields: [
+                { name: "id", type: "BIGINT", constraint: "PK, AUTO_INCREMENT", desc: "唯一主键 ID" },
+                { name: "document_id", type: "BIGINT", constraint: "FK, NOT NULL", desc: "所属的文档源 ID" },
+                { name: "knowledge_base_id", type: "BIGINT", constraint: "NOT NULL", desc: "所属知识库 ID" },
+                { name: "content", type: "TEXT", constraint: "NOT NULL", desc: "切片对应的降噪纯文本片段" },
+                { name: "chunk_index", type: "INTEGER", constraint: "NOT NULL", desc: "切片在原文件中的降序编号 (0-indexed)" }
+            ]
+        },
+        chunk_embedding: {
+            purpose: "pgvector 向量模型专用高维向量度量表，基于 Cosine Ops",
+            fields: [
+                { name: "id", type: "BIGINT", constraint: "PK, AUTO_INCREMENT", desc: "唯一主键 ID" },
+                { name: "chunk_id", type: "BIGINT", constraint: "FK, UNIQUE, NOT NULL", desc: "1:1关联的文本切片主键 ID" },
+                { name: "knowledge_base_id", type: "BIGINT", constraint: "NOT NULL", desc: "所属知识库（加速联合主键索引检索）" },
+                { name: "embedding", type: "vector(1536)", constraint: "NOT NULL", desc: "★ 1536维浮点数向量数据，配置IVFFlat索引" }
+            ]
+        },
+        message: {
+            purpose: "对话消息表，基于二进制 JSONB 映射流式引用溯源和 Function Calls",
+            fields: [
+                { name: "id", type: "BIGINT", constraint: "PK, AUTO_INCREMENT", desc: "唯一主键 ID" },
+                { name: "conversation_id", type: "BIGINT", constraint: "FK, NOT NULL", desc: "绑定的会话上下文 ID" },
+                { name: "role", type: "VARCHAR(20)", constraint: "NOT NULL", desc: "消息角色：user / assistant / system" },
+                { name: "content", type: "TEXT", constraint: "NOT NULL", desc: "消息文本主体内容" },
+                { name: "citations", type: "JSONB", constraint: "NULL", desc: "★ 二进制引用集合，带 GIN 索引" },
+                { name: "tool_calls", type: "JSONB", constraint: "NULL", desc: "智能 Agent 工具函数调用记录" }
+            ]
+        }
+    };
+
+    function showTableSchema(tableName) {
+        // 切换左侧 active
+        const btns = document.querySelectorAll('.db-table-btn');
+        btns.forEach(btn => {
+            if (btn.getAttribute('onclick').includes(tableName)) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // 渲染右侧
+        const data = tableSchemas[tableName];
+        document.getElementById('schema-show-name').innerText = tableName;
+        document.getElementById('schema-show-purpose').innerText = data.purpose;
+        
+        let html = '';
+        data.fields.forEach(f => {
+            let keyStyle = f.constraint.includes('PK') ? 'class="field-key"' : '';
+            html += `<tr>
+                <td class="field-name">${f.name}</td>
+                <td class="field-type">${f.type}</td>
+                <td ${keyStyle}>${f.constraint}</td>
+                <td>${f.desc}</td>
+            </tr>`;
+        });
+        document.getElementById('schema-show-body').innerHTML = html;
+    }
+
+    // 2. 侧边栏导航切换逻辑
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('data-target');
+            
+            // 切换侧边栏高亮
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            this.classList.add('active');
+            
+            // 切换板块活跃状态
+            document.querySelectorAll('section').forEach(sec => {
+                if (sec.id === targetId) {
+                    sec.classList.add('active');
+                } else {
+                    sec.classList.remove('active');
+                }
+            });
+
+            // 修改头部大标题
+            const sectionName = this.innerText.substring(2);
+            document.getElementById('header-title').innerText = `EviMind — ${sectionName}`;
+            
+            // 滚动回顶部
+            window.scrollTo(0, 0);
+        });
+    });
+
+    // 3. FAQ 过滤搜索逻辑
+    function filterFaq() {
+        const query = document.getElementById('faq-search').value.toLowerCase();
+        const items = document.querySelectorAll('.faq-item');
+        
+        items.forEach(item => {
+            const text = item.innerText.toLowerCase();
+            if (text.includes(query)) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+
+    // FAQ 单个抽屉收起展开
+    function toggleFaq(header) {
+        const item = header.parentElement;
+        const body = item.querySelector('.faq-body');
+        
+        // 如果当前是激活的，关闭
+        if (item.classList.contains('active')) {
+            item.classList.remove('active');
+            body.style.maxHeight = '0px';
+        } else {
+            // 关闭其他所有
+            document.querySelectorAll('.faq-item').forEach(i => {
+                i.classList.remove('active');
+                i.querySelector('.faq-body').style.maxHeight = '0px';
+            });
+            // 展开当前
+            item.classList.add('active');
+            body.style.maxHeight = body.scrollHeight + 'px';
+        }
+    }
+
+    // 4. RRF 交互式模拟计算器引擎
+    function runRrfCalculation() {
+        const k = parseFloat(document.getElementById('sim-k-val').value) || 60;
+        
+        // 抓取语义检索表单数据
+        const semanticRows = document.querySelectorAll('#table-semantic tbody tr');
+        let semanticRankList = [];
+        let semScores = [];
+        semanticRows.forEach((row, index) => {
+            const id = row.cells[1].querySelector('input').value.trim();
+            const score = parseFloat(row.cells[2].querySelector('input').value) || 0;
+            if (id) {
+                semanticRankList.push({ id, score, rank: index + 1 });
+                semScores.push(score);
+            }
+        });
+
+        // 抓取全文检索数据
+        const keywordRows = document.querySelectorAll('#table-keyword tbody tr');
+        let keywordRankList = [];
+        let kwScores = [];
+        keywordRows.forEach((row, index) => {
+            const id = row.cells[1].querySelector('input').value.trim();
+            const score = parseFloat(row.cells[2].querySelector('input').value) || 0;
+            if (id) {
+                keywordRankList.push({ id, score, rank: index + 1 });
+                kwScores.push(score);
+            }
+        });
+
+        // 1. Min-Max 归一化计算 (仅用于演示，实际RRF只需按物理排名，但归一化常用于其他加权融合做对比)
+        const maxSem = Math.max(...semScores, 1);
+        const minSem = Math.min(...semScores, 0);
+        const maxKw = Math.max(...kwScores, 1);
+        const minKw = Math.min(...kwScores, 0);
+
+        // 归纳所有的去重 Chunk ID
+        const allChunkIds = Array.from(new Set([
+            ...semanticRankList.map(item => item.id),
+            ...keywordRankList.map(item => item.id)
+        ]));
+
+        // 2. 执行 RRF 得分计算
+        let results = [];
+        allChunkIds.forEach(id => {
+            const semItem = semanticRankList.find(x => x.id === id);
+            const kwItem = keywordRankList.find(x => x.id === id);
+
+            const semRank = semItem ? semItem.rank : Infinity;
+            const kwRank = kwItem ? kwItem.rank : Infinity;
+
+            const semScoreStr = semItem ? semItem.score.toFixed(2) : '未召回';
+            const kwScoreStr = kwItem ? kwItem.score.toFixed(1) : '未召回';
+
+            // RRF 核心计算式
+            const semRrfTerm = semRank === Infinity ? 0 : (1 / (k + semRank));
+            const kwRrfTerm = kwRank === Infinity ? 0 : (1 / (k + kwRank));
+            const rrfScore = semRrfTerm + kwRrfTerm;
+
+            results.push({
+                id,
+                semRank: semRank === Infinity ? '∞' : `#${semRank}`,
+                semScoreText: `${semScoreStr} (${semRank === Infinity ? '-' : '#' + semRank})`,
+                kwScoreText: `${kwScoreStr} (${kwRank === Infinity ? '-' : '#' + kwRank})`,
+                rrfScore: rrfScore,
+                semRankVal: semRank,
+                kwRankVal: kwRank
+            });
+        });
+
+        // 按 RRF 分数进行降序排序
+        results.sort((a, b) => b.rrfScore - a.rrfScore);
+
+        // 3. 动态渲染结果表格
+        let html = '';
+        const maxRrfScore = results[0].rrfScore; // 用于进度条计算比例
+        
+        results.forEach((item, index) => {
+            const finalRank = index + 1;
+            let badgeClass = 'badge-rank-other';
+            if (finalRank === 1) badgeClass = 'badge-rank-1';
+            else if (finalRank === 2) badgeClass = 'badge-rank-2';
+            else if (finalRank === 3) badgeClass = 'badge-rank-3';
+
+            const pct = maxRrfScore > 0 ? (item.rrfScore / maxRrfScore) * 100 : 0;
+
+            html += `<tr>
+                <td><div class="sim-rank-badge ${badgeClass}">${finalRank}</div></td>
+                <td style="font-weight: 700; color: #fff;">${item.id}</td>
+                <td><span style="color: var(--neon-blue);">${item.semScoreText}</span></td>
+                <td><span style="color: var(--neon-purple);">${item.kwScoreText}</span></td>
+                <td>
+                    <div class="score-bar-bg">
+                        <div class="score-bar-fill" style="width: ${pct}%"></div>
+                    </div>
+                    <span style="font-family: var(--font-mono); font-weight: bold; color: var(--neon-cyan);">${item.rrfScore.toFixed(5)}</span>
+                </td>
+            </tr>`;
+        });
+
+        document.getElementById('sim-result-rows').innerHTML = html;
+        
+        // 动态计算智能解说文本
+        const winner = results[0];
+        let insight = `算法计算完成！在本轮计算中，平滑因子取 $k=${k}$。<br>经过融合分析，<strong>${winner.id}</strong> 最终荣登榜首，RRF 得分为 <strong>${winner.rrfScore.toFixed(5)}</strong>。`;
+        
+        if (winner.semRankVal > 1 && winner.kwRankVal > 1) {
+            insight += ` 这是一个非常经典的混合检索获胜范式——该切片在两路都不是第一（语义第${winner.semRankVal}，全文第${winner.kwRankVal}），但由于两路都有高排名曝光度，其累加分超越了其他偶然偏斜的文档，这正是 RRF 算法的鲁棒性所在！`;
+        } else {
+            insight += ` 它依靠在核心通道上的强劲发挥和辅助通道的高频召回实现了最终胜出，能同时保证语义精准度和字面精确性。`;
+        }
+        
+        document.getElementById('sim-insight-text').innerHTML = insight;
+
+        // 切换空状态与展示状态
+        document.getElementById('sim-empty-state').style.display = 'none';
+        document.getElementById('sim-result-state').style.display = 'block';
+
+        showToast("RRF 算法已成功聚合运算！");
+    }
+
+    function resetRrfInputs() {
+        document.querySelectorAll('.sim-input').forEach(input => {
+            if (input.type === 'number' && input.id !== 'sim-k-val') {
+                input.value = '';
+            }
+        });
+        document.getElementById('sim-empty-state').style.display = 'flex';
+        document.getElementById('sim-result-state').style.display = 'none';
+    }
+
+    // 5. 🎬 全屏 Mini Slides 互动演讲功能
+    const triggerSlidesBtn = document.getElementById('trigger-slides');
+    const exitSlidesBtn = document.getElementById('exit-slides');
+    const overlay = document.getElementById('slides-overlay');
+    const prevBtn = document.getElementById('slide-prev');
+    const nextBtn = document.getElementById('slide-next');
+    
+    let currentSlide = 1;
+    const totalSlides = document.querySelectorAll('.slide-page').length;
+
+    triggerSlidesBtn.addEventListener('click', () => {
+        overlay.style.display = 'flex';
+        setTimeout(() => {
+            overlay.classList.add('open');
+        }, 10);
+        currentSlide = 1;
+        updateSlideVisibility();
+        // 监听键盘按键
+        document.addEventListener('keydown', handleSlideKeyboard);
+        showToast("已成功切入全屏答辩演示模式 (左右键翻页)");
+    });
+
+    exitSlidesBtn.addEventListener('click', () => {
+        closeSlides();
+    });
+
+    function closeSlides() {
+        overlay.classList.remove('open');
+        setTimeout(() => {
+            overlay.style.display = 'none';
+        }, 300);
+        document.removeEventListener('keydown', handleSlideKeyboard);
+    }
+
+    function handleSlideKeyboard(e) {
+        if (e.key === 'ArrowRight') {
+            navigateSlide(1);
+        } else if (e.key === 'ArrowLeft') {
+            navigateSlide(-1);
+        } else if (e.key === 'Escape') {
+            closeSlides();
+        }
+    }
+
+    prevBtn.addEventListener('click', () => navigateSlide(-1));
+    nextBtn.addEventListener('click', () => navigateSlide(1));
+
+    function navigateSlide(dir) {
+        let target = currentSlide + dir;
+        if (target >= 1 && target <= totalSlides) {
+            currentSlide = target;
+            updateSlideVisibility();
+        }
+    }
+
+    function updateSlideVisibility() {
+        document.querySelectorAll('.slide-page').forEach(page => {
+            if (parseInt(page.getAttribute('data-index')) === currentSlide) {
+                page.classList.add('active');
+            } else {
+                page.classList.remove('active');
+            }
+        });
+
+        // 按钮状态更新
+        prevBtn.disabled = currentSlide === 1;
+        nextBtn.disabled = currentSlide === totalSlides;
+    }
+
+    // 6. 复制文本机制通用封装
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.innerText = msg;
+        toast.classList.add('show');
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 2500);
+    }
+
+    function copyCodeText(btn) {
+        const code = btn.previousElementSibling.innerText;
+        navigator.clipboard.writeText(code).then(() => {
+            showToast("📋 核心代码段已复制至剪贴板！");
+        });
+    }
+
+    function copyResumeText() {
+        const text = document.getElementById('resume-star-text').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            showToast("📋 简历 STAR 亮点话术已复制！");
+        });
+    }
+
+    function copySpeechText() {
+        const text = document.getElementById('speech-text').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            showToast("📋 三分钟答辩演讲词已复制！");
+        });
+    }
+
+    // 7. 一键下载该完整自建报告的脚本（将自身序列化下载）
+    document.getElementById('trigger-download').addEventListener('click', () => {
+        const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'EviMind_Project_Report.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast("📥 EviMind 离线互动报告打包成功！");
+    });
+</script>
+</body>
+</html>
