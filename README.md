@@ -1,5 +1,76 @@
 # EviMind — RAG 增强的 AI 智能数据分析平台
 
+## 运行系统
+
+当前项目目录为 `D:\EviMind`。项目没有内置默认账号，首次打开登录页后先注册账号，再用注册的用户名和密码登录。
+
+### 方式一：开发模式运行
+
+后端使用 standalone profile，默认使用 H2 本地数据库和本地文件存储，不需要先启动 PostgreSQL、Elasticsearch 或 MinIO。
+
+在第一个 PowerShell 窗口启动后端：
+
+```powershell
+cd D:\EviMind
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-22"
+$env:DEEPSEEK_API_KEY = "your-key"   # 可选；不设置时部分 AI 对话能力不可用
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=standalone"
+```
+
+后端启动完成后，可以检查健康状态：
+
+```text
+http://localhost:8080/api/v1/health
+```
+
+在第二个 PowerShell 窗口启动前端开发服务器：
+
+```powershell
+cd D:\EviMind\frontend
+npm install
+npm run dev -- --host 127.0.0.1
+```
+
+然后打开：
+
+```text
+http://127.0.0.1:5173
+```
+
+前端开发服务器会把 `/api` 请求代理到 `http://localhost:8080`，所以需要先启动后端。
+
+### 方式二：打包后运行单体服务
+
+```powershell
+cd D:\EviMind
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-22"
+$env:DEEPSEEK_API_KEY = "your-key"   # 可选
+.\build.bat
+.\start.bat
+```
+
+打包模式会把前端静态文件复制进后端资源目录，启动后打开：
+
+```text
+http://localhost:8080
+```
+
+### 方式三：Docker Compose
+
+```powershell
+cd D:\EviMind
+copy .env.example .env
+docker-compose up -d
+```
+
+使用 Docker 前需要编辑 `.env`，填入数据库、对象存储、JWT 和 AI provider 等配置。
+
+### 常见问题
+
+- 如果提示 `JAVA_HOME not found`，先在当前 PowerShell 设置 `$env:JAVA_HOME = "C:\Program Files\Java\jdk-22"`，或改成本机实际 JDK 路径。
+- 如果前端部署在其他域名或端口，后端需要设置 `CORS_ALLOWED_ORIGIN_PATTERNS`，例如 `https://example.com,http://localhost:5173`。
+- standalone 模式的数据文件在 `data\evimind-standalone.mv.db`，上传文件默认保存在 `data\documents`。
+
 基于 RAG（Retrieval-Augmented Generation）架构的文档分析与智能问答平台。支持文档自动入库、向量/关键词混合检索、多模型 AI 对话、引用追溯、知识库协作和科研辅助功能。
 
 ## 快速开始
