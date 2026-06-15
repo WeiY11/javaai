@@ -46,11 +46,25 @@ export interface StreamCallbacks {
   onError: (error: string) => void
 }
 
+export interface StreamOptions {
+  temperature?: number
+  topP?: number
+  maxTokens?: number
+  modelName?: string
+  thinking?: boolean
+  reasoningEffort?: string
+}
+
+/**
+ * 流式消息发送，支持 AbortController 中止。
+ * 面试点：SSE 流的 AbortController 控制、ReadableStream 解析。
+ */
 export async function streamMessage(
   conversationId: number,
   content: string,
   callbacks: StreamCallbacks,
-  params?: { temperature?: number; topP?: number; maxTokens?: number }
+  params?: StreamOptions,
+  signal?: AbortSignal
 ): Promise<void> {
   const token = localStorage.getItem('accessToken')
   const response = await fetch(`/api/v1/conversations/${conversationId}/messages/stream`, {
@@ -59,10 +73,12 @@ export async function streamMessage(
       'Content-Type': 'application/json',
       'Authorization': token ? `Bearer ${token}` : ''
     },
-    body: JSON.stringify({ content, ...params })
+    body: JSON.stringify({ content, ...params }),
+    signal
   })
 
   if (!response.ok) {
+    if (signal?.aborted) return
     const errorText = await response.text()
     callbacks.onError(`HTTP ${response.status}: ${errorText}`)
     return
@@ -77,44 +93,52 @@ export async function streamMessage(
   const decoder = new TextDecoder()
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
 
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
 
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
 
-      let data = trimmed
-      if (trimmed.startsWith('data:')) {
-        data = trimmed.substring(5).trim()
-      }
-
-      if (!data) continue
-
-      try {
-        const event = JSON.parse(data)
-        switch (event.type) {
-          case 'token':
-            callbacks.onToken(event.text || '')
-            break
-          case 'citations':
-            callbacks.onCitations(event.citations || [])
-            break
-          case 'done':
-            callbacks.onDone(event.messageId)
-            break
-          case 'error':
-            callbacks.onError(event.message || 'Unknown error')
-            break
+        let data = trimmed
+        if (trimmed.startsWith('data:')) {
+          data = trimmed.substring(5).trim()
         }
-      } catch {
-        // Skip non-JSON data lines
+
+        if (!data) continue
+
+        try {
+          const event = JSON.parse(data)
+          switch (event.type) {
+            case 'token':
+              callbacks.onToken(event.text || '')
+              break
+            case 'citations':
+              callbacks.onCitations(event.citations || [])
+              break
+            case 'done':
+              callbacks.onDone(event.messageId)
+              break
+            case 'error':
+              callbacks.onError(event.message || 'Unknown error')
+              break
+          }
+        } catch {
+          // Skip non-JSON data lines
+        }
       }
     }
+  } catch (e: any) {
+    if (e.name === 'AbortError' || signal?.aborted) {
+      // 用户主动中止，不算错误
+      return
+    }
+    throw e
   }
 }

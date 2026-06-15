@@ -38,10 +38,13 @@ public class DocumentService {
     private LocalFileStorageService localFileStorageService;
     @Autowired
     private EtlPipeline etlPipeline;
+    @Autowired(required = false)
+    private com.example.evimind.service.DocumentPermissionService documentPermissionService;
 
     private static final Set<String> ALLOWED_FORMATS = Set.of(
             "pdf", "xlsx", "xls", "docx", "doc", "csv", "json", "md", "txt",
-            "py", "java", "sql", "xml", "yaml", "yml", "log", "tex", "markdown"
+            "py", "java", "sql", "xml", "yaml", "yml", "log", "tex", "markdown",
+            "pptx", "epub"
     );
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
 
@@ -82,6 +85,15 @@ public class DocumentService {
         doc.setChunkCount(0);
         doc.setUploaderId(GroupContext.getUserId());
         documentMapper.insert(doc);
+
+        // Grant ADMIN permission to the uploader
+        if (documentPermissionService != null) {
+            try {
+                documentPermissionService.grantOwnerPermission(doc.getId());
+            } catch (Exception e) {
+                log.warn("Failed to grant owner permission for document {}: {}", doc.getId(), e.getMessage());
+            }
+        }
 
         triggerIngestionAsync(doc.getId());
         return doc;

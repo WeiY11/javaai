@@ -57,10 +57,12 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import {
   ChatDotRound,
   Collection,
+  Connection,
   Files,
   Menu,
   Notebook,
   Reading,
+  Share,
   TrendCharts
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth.store'
@@ -78,6 +80,8 @@ const navItems = [
   { path: '/documents', label: '文档', icon: Files, title: '文档入库', eyebrow: '上传、入库状态与切片' },
   { path: '/analysis', label: '文件分析', icon: TrendCharts, title: '文件分析', eyebrow: '批量分析与报告导出' },
   { path: '/citations', label: '引用导出', icon: Reading, title: '引用导出', eyebrow: 'BibTeX 与 APA' },
+  { path: '/academic', label: '学术图谱', icon: Share, title: '学术图谱', eyebrow: '引用网络与文献综述' },
+  { path: '/knowledge-graph', label: '知识图谱', icon: Connection, title: '知识图谱', eyebrow: '实体关系与多跳推理' },
   { path: '/notes', label: '科研笔记', icon: Notebook, title: '科研笔记', eyebrow: '切片批注与研究记录' }
 ]
 

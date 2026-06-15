@@ -7,6 +7,7 @@ import com.example.evimind.mapper.KbMemberMapper;
 import com.example.evimind.mapper.KnowledgeBaseMapper;
 import com.example.evimind.model.entity.KnowledgeBase;
 import com.example.evimind.retrieval.HybridSearchService;
+import com.example.evimind.retrieval.Reranker;
 import com.example.evimind.retrieval.SearchResult;
 import org.junit.jupiter.api.AfterEach;
 import org.springframework.ai.chat.client.ChatClient;
@@ -37,6 +38,7 @@ class RagPipelineTest {
     @Mock private DocumentMapper documentMapper;
     @Mock private PromptTemplateManager promptTemplateManager;
     @Mock private Map<String, ChatClient> chatClients;
+    @Mock private Reranker reranker;
 
     @InjectMocks
     private RagPipeline ragPipeline;
@@ -44,6 +46,8 @@ class RagPipelineTest {
     @BeforeEach
     void setUp() {
         GroupContext.set(1L, 1L, "USER");
+        // 禁用 reranker 以确保现有测试不受影响
+        ReflectionTestUtils.setField(ragPipeline, "rerankerEnabled", false);
     }
 
     @AfterEach
@@ -59,7 +63,7 @@ class RagPipelineTest {
 
         when(kbMemberMapper.selectCount(any())).thenReturn(1L);
         when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
-        when(hybridSearchService.search(anyString(), eq(1L), eq(10))).thenReturn(List.of());
+        when(hybridSearchService.search(anyString(), eq(1L), eq(10), isNull())).thenReturn(List.of());
         when(promptTemplateManager.render(eq("evidence-insufficient-prompt"), anyMap()))
                 .thenReturn("抱歉，没有找到相关信息。");
 
@@ -82,7 +86,7 @@ class RagPipelineTest {
 
         when(kbMemberMapper.selectCount(any())).thenReturn(1L);
         when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
-        when(hybridSearchService.search(anyString(), eq(1L), eq(10))).thenReturn(results);
+        when(hybridSearchService.search(anyString(), eq(1L), eq(10), isNull())).thenReturn(results);
         when(promptTemplateManager.render(eq("evidence-insufficient-prompt"), anyMap()))
                 .thenReturn("证据不足");
 
@@ -106,7 +110,7 @@ class RagPipelineTest {
 
         when(kbMemberMapper.selectCount(any())).thenReturn(1L);
         when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
-        when(hybridSearchService.search(anyString(), eq(1L), eq(10))).thenReturn(results);
+        when(hybridSearchService.search(anyString(), eq(1L), eq(10), isNull())).thenReturn(results);
         when(promptTemplateManager.render(eq("evidence-sufficient-prompt"), anyMap()))
                 .thenReturn("prompt");
         when(chatClients.isEmpty()).thenReturn(true);
@@ -133,7 +137,7 @@ class RagPipelineTest {
 
         when(kbMemberMapper.selectCount(any())).thenReturn(1L);
         when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
-        when(hybridSearchService.search(anyString(), eq(1L), eq(10))).thenReturn(results);
+        when(hybridSearchService.search(anyString(), eq(1L), eq(10), isNull())).thenReturn(results);
         when(promptTemplateManager.render(eq("evidence-sufficient-prompt"), anyMap()))
                 .thenReturn("prompt");
         when(chatClients.isEmpty()).thenReturn(true);
@@ -165,7 +169,7 @@ class RagPipelineTest {
 
         when(kbMemberMapper.selectCount(any())).thenReturn(1L);
         when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
-        when(hybridSearchService.search(anyString(), eq(1L), eq(10))).thenReturn(results);
+        when(hybridSearchService.search(anyString(), eq(1L), eq(10), isNull())).thenReturn(results);
         when(promptTemplateManager.render(eq("evidence-sufficient-prompt"), anyMap()))
                 .thenReturn("prompt");
         when(chatClients.isEmpty()).thenReturn(false);
@@ -196,5 +200,50 @@ class RagPipelineTest {
         when(knowledgeBaseMapper.selectById(1L)).thenReturn(null);
 
         assertThrows(IllegalArgumentException.class, () -> ragPipeline.query("test", 1L));
+    }
+
+    @Test
+    void shouldApplyRerankerWhenEnabled() {
+        ReflectionTestUtils.setField(ragPipeline, "rerankerEnabled", true);
+        ReflectionTestUtils.setField(ragPipeline, "rerankerTopN", 5);
+        ReflectionTestUtils.setField(ragPipeline, "maxEvidenceContextChars", 6000);
+
+        KnowledgeBase kb = new KnowledgeBase();
+        kb.setId(1L);
+        kb.setEvidenceThreshold(new BigDecimal("0.30"));
+
+        List<SearchResult> fusedResults = List.of(
+                new SearchResult("c1", 1L, 1L, "content1", 0, 0.90, "rrf_fused"),
+                new SearchResult("c2", 2L, 1L, "content2", 1, 0.80, "rrf_fused"),
+                new SearchResult("c3", 3L, 1L, "content3", 2, 0.70, "rrf_fused")
+        );
+        // Reranker 将顺序反转（c3 最相关）
+        List<SearchResult> rerankedResults = List.of(
+                new SearchResult("c3", 3L, 1L, "content3", 2, 0.95, "rrf_fused+reranked"),
+                new SearchResult("c1", 1L, 1L, "content1", 0, 0.60, "rrf_fused+reranked"),
+                new SearchResult("c2", 2L, 1L, "content2", 1, 0.40, "rrf_fused+reranked")
+        );
+
+        ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
+
+        when(kbMemberMapper.selectCount(any())).thenReturn(1L);
+        when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
+        when(hybridSearchService.search(anyString(), eq(1L), eq(10), isNull())).thenReturn(fusedResults);
+        when(reranker.rerank(eq("test query"), eq(fusedResults), eq(5))).thenReturn(rerankedResults);
+        when(promptTemplateManager.render(eq("evidence-sufficient-prompt"), anyMap())).thenReturn("prompt");
+        when(chatClients.isEmpty()).thenReturn(false);
+        when(chatClients.values()).thenReturn(List.of(chatClient));
+        when(chatClient.prompt().user(anyString()).call().content()).thenReturn("answer");
+        when(documentMapper.selectBatchIds(anyCollection())).thenReturn(List.of());
+
+        RagResponse response = ragPipeline.query("test query", 1L);
+
+        assertEquals(RagResponse.EvidenceStatus.SUFFICIENT, response.getEvidenceStatus());
+        assertEquals("answer", response.getAnswer());
+        // 验证 reranker 被调用
+        verify(reranker).rerank("test query", fusedResults, 5);
+        // 验证 citations 来自 reranked 结果（c3 排第一，documentId = 3）
+        assertNotNull(response.getCitations());
+        assertEquals(3L, response.getCitations().get(0).getDocumentId());
     }
 }

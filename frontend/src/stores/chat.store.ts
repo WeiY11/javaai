@@ -17,7 +17,11 @@ export const useChatStore = defineStore('chat', () => {
   const currentConversation = ref<Conversation | null>(null)
   const messages = ref<ChatMessage[]>([])
   const isLoading = ref(false)
+  const isStreaming = ref(false)
   const selectedKbId = ref<number | undefined>(undefined)
+
+  // AbortController 用于中止 SSE 流
+  let currentAbortController: AbortController | null = null
 
   async function loadConversations() {
     conversations.value = await chatApi.listConversations()
@@ -63,6 +67,12 @@ export const useChatStore = defineStore('chat', () => {
     messages.value.push(assistantMsg)
 
     isLoading.value = true
+    isStreaming.value = true
+
+    // 创建 AbortController 用于中止流
+    currentAbortController = new AbortController()
+    const signal = currentAbortController.signal
+
     try {
       await chatApi.streamMessage(currentConversation.value.id, content, {
         onToken(text: string) {
@@ -75,15 +85,44 @@ export const useChatStore = defineStore('chat', () => {
           // message saved by server
         },
         onError(error: string) {
-          assistantMsg.content = `错误: ${error}`
+          if (!signal.aborted) {
+            assistantMsg.content = `错误: ${error}`
+          }
         }
-      }, params)
+      }, params, signal)
       loadConversations()
     } catch (e: any) {
-      assistantMsg.content = `错误: ${e.message || '请求失败'}`
+      if (!signal.aborted) {
+        assistantMsg.content = `错误: ${e.message || '请求失败'}`
+      }
     } finally {
       isLoading.value = false
+      isStreaming.value = false
+      currentAbortController = null
     }
+  }
+
+  /**
+   * 中止当前正在流式生成的回答。
+   * 面试点：AbortController 控制 SSE 流的生命周期。
+   */
+  function stopGenerating() {
+    if (currentAbortController) {
+      currentAbortController.abort()
+      currentAbortController = null
+      isStreaming.value = false
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * 导出当前对话为 Markdown 或 JSON。
+   */
+  async function exportCurrentConversation(format: 'markdown' | 'json' = 'markdown'): Promise<string> {
+    if (!currentConversation.value) {
+      throw new Error('请先选择会话')
+    }
+    return chatApi.exportConversation(currentConversation.value.id, format)
   }
 
   async function deleteConversation(id: number) {
@@ -97,7 +136,8 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   return {
-    conversations, currentConversation, messages, isLoading, selectedKbId,
-    loadConversations, selectConversation, createConversation, sendMessage, deleteConversation
+    conversations, currentConversation, messages, isLoading, isStreaming, selectedKbId,
+    loadConversations, selectConversation, createConversation,
+    sendMessage, stopGenerating, exportCurrentConversation, deleteConversation
   }
 })

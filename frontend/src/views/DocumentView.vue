@@ -24,12 +24,12 @@
         :show-file-list="false"
         :disabled="!selectedKbId"
         :on-change="handleFileChange"
-        accept=".pdf,.docx,.xlsx,.csv,.json,.md,.txt"
+        accept=".pdf,.docx,.xlsx,.csv,.json,.md,.txt,.pptx,.epub"
         drag
       >
         <div class="upload-copy">
           <strong>拖拽或点击上传文档</strong>
-          <span>支持 PDF、Word、Excel、CSV、JSON、Markdown、TXT</span>
+          <span>支持 PDF、Word、Excel、CSV、JSON、Markdown、TXT、PPT、EPUB</span>
         </div>
       </el-upload>
 

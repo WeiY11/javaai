@@ -1,8 +1,14 @@
 D:\EviMind\src\test\java\com\example\evimind\assistant\AgentToolsTest.java
 D:\EviMind\src\test\java\com\example\evimind\CheckOptions.java
+D:\EviMind\src\test\java\com\example\evimind\config\SecurityConfigTest.java
 D:\EviMind\src\test\java\com\example\evimind\ingestion\EtlPipelineTest.java
+D:\EviMind\src\test\java\com\example\evimind\integration\AuthDocumentIntegrationTest.java
+D:\EviMind\src\test\java\com\example\evimind\integration\BaseIntegrationTest.java
 D:\EviMind\src\test\java\com\example\evimind\OptionsTest.java
 D:\EviMind\src\test\java\com\example\evimind\qa\EvidencePortfolioSelectorTest.java
 D:\EviMind\src\test\java\com\example\evimind\qa\RagPipelineTest.java
 D:\EviMind\src\test\java\com\example\evimind\retrieval\HybridSearchServiceTest.java
+D:\EviMind\src\test\java\com\example\evimind\retrieval\PromptBasedRerankerTest.java
+D:\EviMind\src\test\java\com\example\evimind\retrieval\QueryRewriteServiceTest.java
 D:\EviMind\src\test\java\com\example\evimind\retrieval\RrfFusionServiceTest.java
+D:\EviMind\src\test\java\com\example\evimind\retrieval\SimpleKeywordSearchServiceTest.java

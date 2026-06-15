@@ -1,0 +1,143 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "evimind-rag-overview",
+    "title": "EviMind RAG Overview",
+    "tags": ["evimind", "rag"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": { "from": "now-1h", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "RAG Query Duration (P50/P95/P99)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(rag_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(rag_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(rag_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "P99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Backend Search Duration",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "rate(rag_search_backend_duration_seconds_sum[5m]) / rate(rag_search_backend_duration_seconds_count[5m])",
+            "legendFormat": "{{backend}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "s", "custom": { "drawStyle": "line" } }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Evidence Status",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "increase(rag_evidence_status_total{status=\"SUFFICIENT\"}[1h])",
+            "legendFormat": "Sufficient"
+          },
+          {
+            "expr": "increase(rag_evidence_status_total{status=\"INSUFFICIENT\"}[1h])",
+            "legendFormat": "Insufficient"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "thresholds": { "steps": [{"color": "green", "value": null}, {"color": "red", "value": 5}] } }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Degraded Searches",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 },
+        "targets": [
+          { "expr": "increase(rag_search_degraded_total[1h])", "legendFormat": "Degraded" }
+        ],
+        "fieldConfig": {
+          "defaults": { "thresholds": { "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}] } }
+        }
+      },
+      {
+        "id": 5,
+        "title": "ETL Document Duration (P50/P95)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(etl_document_duration_seconds_bucket[5m]))",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(etl_document_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 10 } }
+        }
+      },
+      {
+        "id": 6,
+        "title": "ETL Success / Failure Rate",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+        "targets": [
+          {
+            "expr": "increase(etl_document_status_total{status=\"SUCCESS\"}[1h])",
+            "legendFormat": "Success"
+          },
+          {
+            "expr": "increase(etl_document_status_total{status=\"FAILED\"}[1h])",
+            "legendFormat": "Failed"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 50 } }
+        }
+      },
+      {
+        "id": 7,
+        "title": "KG & Citation Extraction",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+        "targets": [
+          { "expr": "increase(kg_extraction_total[24h])", "legendFormat": "KG Triples" },
+          { "expr": "increase(citation_extraction_total[24h])", "legendFormat": "Citations" }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "JVM Memory Usage",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          { "expr": "jvm_memory_used_bytes{area=\"heap\"}", "legendFormat": "Heap Used" },
+          { "expr": "jvm_memory_max_bytes{area=\"heap\"}", "legendFormat": "Heap Max" }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "bytes", "custom": { "drawStyle": "line" } }
+        }
+      }
+    ]
+  }
+}

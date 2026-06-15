@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EviMind — RAG 增强数据分析平台 · 终极保姆级源码教程</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/night.min.css" id="theme">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        .reveal { font-family: 'Inter', 'Noto Sans SC', sans-serif; font-size: 28px; }
+        .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            font-weight: 700;
+            text-transform: none;
+            background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 20px;
+        }
+        .reveal code { font-family: 'JetBrains Mono', monospace; }
+        
+        .flex-row { display: flex; flex-direction: row; justify-content: space-between; gap: 30px; width: 100%; }
+        .w-50 { width: 48%; }
+        .w-33 { width: 32%; }
+        
+        .geek-card {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 25px;
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        
+        /* 讲师详细解析框 */
+        .lecturer-notes {
+            background: rgba(16, 185, 129, 0.1);
+            border-left: 6px solid #10b981;
+            border-radius: 0 12px 12px 0;
+            padding: 25px;
+            text-align: left;
+            font-size: 0.75em;
+            line-height: 1.8;
+            color: #d1d5db;
+            margin-top: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .lecturer-notes strong { color: #34d399; }
+        .lecturer-notes h4 { 
+            -webkit-text-fill-color: #34d399; 
+            font-size: 1.2em; 
+            margin-top: 0; 
+            margin-bottom: 15px; 
+            display: flex;
+            align-items: center;
+        }
+        .lecturer-notes h4::before { content: "👨‍🏫 讲师大白话解析："; margin-right: 10px; }
+        
+        .reveal pre { width: 100%; margin: 0; border-radius: 8px; font-size: 0.65em; }
+        .hl-blue { color: #60a5fa; font-weight: 600; }
+        .hl-yellow { color: #fbbf24; font-weight: 600; }
+        .hl-red { color: #f87171; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+
+            <!-- COVER -->
+            <section>
+                <h1 style="font-size: 3em;">EviMind</h1>
+                <h3 style="color: #94a3b8; font-weight: 400; -webkit-text-fill-color: #94a3b8; margin-bottom: 40px;">企业级 RAG 系统 · 终极保姆级源码解读</h3>
+                <p class="text-sm" style="color: #64748b;">
+                    提示：按 <kbd>Space</kbd> 翻页，按 <kbd>Esc</kbd> 开启大纲，按 <kbd>F</kbd> 全屏演示<br>
+                    <strong>（本版本加入了极其详尽的文字解析与全栈技术架构剖析）</strong>
+                </p>
+            </section>
+
+            <!-- PART 1: RAG 概念深挖 -->
+            <section>
+                <section>
+                    <h2>Part 1. 为什么必须用 RAG？</h2>
+                    <p>大白话带你搞懂行业痛点</p>
+                </section>
+                
+                <section>
+                    <h3>大模型的“幻觉”与企业数据的“孤岛”</h3>
+                    <div class="flex-row">
+                        <div class="w-50 geek-card" style="border-left: 5px solid #ef4444;">
+                            <h4 style="-webkit-text-fill-color:#f87171;">痛点一：大模型会“胡说八道”</h4>
+                            <p style="font-size:0.7em;">大模型（如 ChatGPT）就像一个读过无数书但不允许带书进考场的考生。当你问它企业内部机密问题时，它为了不交白卷，会凭印象“编造”假答案。</p>
+                        </div>
+                        <div class="w-50 geek-card" style="border-left: 5px solid #3b82f6;">
+                            <h4 style="-webkit-text-fill-color:#60a5fa;">痛点二：传统搜索“不懂人话”</h4>
+                            <p style="font-size:0.7em;">传统搜索（如 Elasticsearch 的 BM25）靠“关键字匹配”。你搜“降本增效”，文章里写的是“削减开支”，它就死活搜不出来，因为它不懂语义。</p>
+                        </div>
+                    </div>
+                    <div class="lecturer-notes fragment">
+                        <h4>如何破局？</h4>
+                        这就是 <strong>EviMind (基于 RAG 架构)</strong> 诞生的意义：把“闭卷考试”变成“开卷考试”。系统收到问题后，先去数据库里找出最相关的内部机密文档，然后把这些文档和问题一起发给大模型，让大模型“照着书念”，彻底消灭幻觉！
+                    </div>
+                </section>
+            </section>
+
+            <!-- PART 2: 全栈架构生态大阅兵 (NEW) -->
+            <section>
+                <section>
+                    <h2>Part 2. 全栈技术架构选型大阅兵</h2>
+                    <p>为什么不用大杂烩，而要选这些顶级组件？</p>
+                </section>
+                
+                <section>
+                    <h3>后端核心架构与组件生态</h3>
+                    <div class="flex-row">
+                        <div class="w-50 geek-card" style="border-left: 5px solid #10b981;">
+                            <h4 style="-webkit-text-fill-color:#34d399;">☕ 核心框架与 ORM</h4>
+                            <ul style="font-size:0.65em;">
+                                <li><strong>Java 21</strong>: 彻底拥抱虚拟线程 (Virtual Threads)，用极小的内存扛住高并发连接。</li>
+                                <li><strong>Spring Boot 3.5</strong>: 最新一代企业级容器底座。</li>
+                                <li><strong>MyBatis-Plus</strong>: 最懂中国程序员的 ORM。提供强大的 Lambda 条件构造器（<code>LambdaQueryWrapper</code>）和 MetaObjectHandler 自动字段填充。</li>
+                                <li><strong>Spring AI</strong>: 官方正统的 AI 大模型抽象层。一套 API 无缝切换 OpenAI / 智谱 / 通义千问。</li>
+                            </ul>
+                        </div>
+                        <div class="w-50 geek-card" style="border-left: 5px solid #a855f7;">
+                            <h4 style="-webkit-text-fill-color:#c084fc;">🗄️ 数据库与中间件</h4>
+                            <ul style="font-size:0.65em;">
+                                <li><strong>PostgreSQL 16 + pgvector</strong>: EviMind 的心脏。这不仅是关系型数据库，它的 JSONB 能秒杀 MongoDB，而它的 pgvector 插件则是当今最主流的向量检索引擎（存放 1536 维数据）。</li>
+                                <li><strong>Elasticsearch 8.x</strong>: 提供 BM25 倒排索引支持，用于兜底“纯关键字精确匹配”。</li>
+                                <li><strong>MinIO</strong>: 开源的企业级对象存储，兼容 S3 协议，安全存储用户上传的几十兆原始 PDF。</li>
+                                <li><strong>Flyway</strong>: 数据库界的 Git。绝不用危险的 <code>ddl-auto:update</code>，严格靠 SQL 脚本迁移，防范删表跑路。</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>为什么要用这么“重”的架构？</h4>
+                        你可能会说：“我用 Python 的 LangChain + SQLite，几十行代码也能跑通一个 RAG”。<br>
+                        但是在企业级生产环境中，你的系统需要：<strong>防越权漏洞、支撑万级用户并发、保证文档隔离、保存结构化的工具调用记录</strong>。Python 脚本就像是搭积木玩具，而 Java Spring 生态 + PostgreSQL/ES 的这套组合拳，则是真正的“钢筋混凝土摩天大楼”。这才是进大厂、干大项目的核心工业级标准。
+                    </div>
+                </section>
+
+                <section>
+                    <h3>前端架构选型与防线部署</h3>
+                    <div class="flex-row">
+                        <div class="w-50 geek-card" style="border-left: 5px solid #3b82f6;">
+                            <h4 style="-webkit-text-fill-color:#60a5fa;">💻 视图与状态流转</h4>
+                            <ul style="font-size:0.65em;">
+                                <li><strong>Vue 3 (Composition API)</strong>: 摒弃 Options API，利用 <code>&lt;script setup&gt;</code> 带来的极简心智负担。</li>
+                                <li><strong>TypeScript</strong>: 强类型约束极其重要。因为 AI 会返回极其复杂的 JSON（比如工具调用格式），没有类型提示前端早就崩溃了。</li>
+                                <li><strong>Pinia</strong>: 取代 Vuex。它的响应式机制是“SSE 流式打字机效果”的底层功臣（对象被推入后，只需对 <code>content</code> 进行加法拼接，Vue 就会自动重绘）。</li>
+                                <li><strong>Vite 8</strong>: 抛弃笨重的 Webpack，利用浏览器原生 ES 模块机制，毫秒级冷启动。</li>
+                                <li><strong>Element Plus</strong>: 支撑了左侧弹窗、折叠面板等复杂的交互组件。</li>
+                            </ul>
+                        </div>
+                        <div class="w-50 geek-card" style="border-left: 5px solid #ef4444;">
+                            <h4 style="-webkit-text-fill-color:#f87171;">🛡️ 渲染引擎与安全防线</h4>
+                            <ul style="font-size:0.65em;">
+                                <li><strong>Markdown-It</strong>: 把 AI 返回的 Markdown 语法转成 HTML。</li>
+                                <li><strong>Highlight.js</strong>: 给大模型写的 Python/Java 代码加上漂亮的代码高亮。</li>
+                                <li><strong>DOMPurify (极其关键)</strong>: AI 生成的 HTML 里可能包含恶意的 <code>&lt;script&gt;</code> 标签。DOMPurify 充当最后一道防线，在 HTML 渲染到页面前，把所有的投毒脚本彻底清洗干净，防止 XSS 跨站攻击。</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>前后端分离是如何通信的？</h4>
+                        EviMind 的前端极其清爽。对于普通的增删改查，前端利用 <strong>Axios</strong> 发送带有 JWT 的 JSON 请求；而对于核心的聊天界面，前端利用原生浏览器的 <strong>fetch + ReadableStream</strong> 接收后端的 Server-Sent Events (SSE) 事件流。这就好像后端在用电报机“哒哒哒”地往前端逐字拍电报，前端一边收一边渲染！
+                    </div>
+                </section>
+            </section>
+
+            <!-- PART 3: 数据库设计深挖 -->
+            <section>
+                <section>
+                    <h2>Part 3. 数据库设计到底有多细节？</h2>
+                    <p>JSONB 与 向量索引的架构之美</p>
+                </section>
+
+                <section>
+                    <h3>为什么 message 表要大量使用 JSONB？</h3>
+                    <div class="geek-card">
+                        <pre><code class="language-sql" data-line-numbers="1-5">CREATE TABLE message (
+    id BIGSERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    citations JSONB,    -- 存储AI回答时引用的文献片段
+    tool_calls JSONB    -- 存储大模型调用的工具记录
+);</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>告别恐怖的“连表查询灾难”</h4>
+                        在传统的系统设计中，一个对话可能包含 50 条消息，每条消息又可能引用了 5 个文献片段。如果用传统的关系型设计，你需要建一张中间表。每次打开聊天记录，数据库就要做庞大而复杂的 <code>JOIN</code> 连接操作，数据库会被拖垮。
+                        <br><br>
+                        <strong>PostgreSQL 的杀手锏：JSONB。</strong><br>
+                        我们把引用文献的名字、得分、内容，直接打包成一个 JSON 数组存在 <code>citations</code> 中。读取一条消息时，它的引用数据瞬间就能一并被提取出来，完全没有连表开销！不仅如此，PG 还允许我们在 JSONB 字段上建立 <strong>GIN 倒排索引</strong>。
+                    </div>
+                </section>
+
+                <section>
+                    <h3>Elasticsearch 倒排索引的坑点避雷</h3>
+                    <div class="geek-card">
+                        <pre><code class="language-json">"mappings": {
+  "properties": {
+    "content":       { "type": "text", "analyzer": "standard" },
+    "knowledgeBaseId": { "type": "keyword" }, // ⚠️ 这里极度关键！
+    "documentId":    { "type": "keyword" }
+  }
+}</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>为什么 ID 必须是 keyword 而不是 integer？</h4>
+                        这是一个极其高频的面试坑点。<br>
+                        如果你把 ID 设为 <code>integer</code>，Elasticsearch 底层会为它构建 <strong>BKD Tree（多维范围树）</strong>，这种结构是为 <code>age > 18</code> 这种“范围查询”优化的，但对于精确相等查询（<code>ID == 5</code>）反而很慢！<br>
+                        而 <code>keyword</code> 类型底层构建的是 <strong>倒排字典树</strong>。我们在做混合检索时，只需精准命中字典里的这一项，速度呈指数级提升。
+                    </div>
+                </section>
+            </section>
+
+            <!-- PART 4: ETL 流水线源码深挖 -->
+            <section>
+                <section>
+                    <h2>Part 4. 文档摄入流水线 (ETL)</h2>
+                    <p>策略模式与文本滑窗的高阶应用</p>
+                </section>
+                
+                <section>
+                    <h3>消灭又臭又长的 if-else：策略模式实战</h3>
+                    <div class="geek-card">
+                        <pre><code class="language-java" data-line-numbers="1-2|6-9">@Service
+public class FileExtractorService {
+    // 魔法：Spring 自动把实现了该接口的所有类收集到 List 中
+    private final List&lt;FileContentExtractor&gt; extractors; 
+
+    public ExtractionResult extractFile(Path filePath, String fileName) {
+        for (FileContentExtractor extractor : extractors) {
+            if (extractor.supports(fileName)) { // 能处理吗？
+                return extractor.extract(filePath); // 交给你了！
+            }
+        }
+    }
+}</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>极致的开闭原则 (OCP)</h4>
+                        初级程序员处理多格式文件，往往会写出长达几百行的 <code>switch-case</code>。在 EviMind 中，利用 Spring 容器强大的 <code>List</code> 自动注入机制，将控制权反转。明天要加一个 PPT 解析功能？很简单，新建一个 <code>PptExtractor.java</code> 实现接口即可。主干调度代码<strong>一个字都不需要修改</strong>！
+                    </div>
+                </section>
+
+                <section>
+                    <h3>文本切片 (Chunking) 的滑窗防断层算法</h3>
+                    <div class="geek-card" style="border-left: 5px solid #f59e0b;">
+                        <pre><code class="language-java" data-line-numbers="2-3|5-11">private String getOverlapText(String text, int overlapSize) {
+    int targetStart = text.length() - overlapSize;
+    // 分别向前和向后寻找最近的标点符号（如句号、感叹号、回车）
+    int breakBefore = findPunctuationBackward(text, targetStart);
+    int breakAfter = findPunctuationForward(text, targetStart);
+    
+    // 比较向前和向后哪个离目标截断点更近，就在那个标点之后截断
+    int bestStart = (targetStart - breakBefore) <= (breakAfter - targetStart) ?
+                    (breakBefore + 1) : (breakAfter + 1);
+    
+    return text.substring(bestStart).trim();
+}</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>为什么要找标点符号截断？</h4>
+                        如果用户规定每个切片 500 字，重叠 100 字。最粗暴的做法就是用 <code>substring</code> 生硬切断。但这会导致一句话可能刚说了一半被残忍切断，后续打成的向量也就成了垃圾。<br><br>
+                        这段源码展示了 EviMind 的<strong>语义级滑窗算法</strong>：找到硬截断点附近最近的一个句号，确保切片重叠部分是<strong>一整句完整的话</strong>，极大地保证了上下文语意的连贯性。
+                    </div>
+                </section>
+            </section>
+
+            <!-- PART 5: 并发检索与防幻觉 -->
+            <section>
+                <section>
+                    <h2>Part 5. 混合检索与 RRF 融合</h2>
+                    <p>并发极限压榨与结果平滑</p>
+                </section>
+
+                <section>
+                    <h3>并发双路搜索与优雅降级</h3>
+                    <div class="geek-card">
+                        <pre><code class="language-java" data-line-numbers="1-2|4-5|7-12">CompletableFuture&lt;List&lt;SearchResult&gt;&gt; semanticFuture = 
+    CompletableFuture.supplyAsync(() -> pgVectorSearchService.search());
+
+CompletableFuture&lt;List&lt;SearchResult&gt;&gt; keywordFuture = 
+    CompletableFuture.supplyAsync(() -> elasticsearchSearchService.search());
+
+// 阻塞等待两个线程，超时时间 3 秒
+List&lt;SearchResult&gt; semanticResults;
+try { 
+    semanticResults = semanticFuture.get(3, SECONDS); 
+} catch (Exception e) { 
+    semanticResults = List.of(); // 降级！
+} </code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>把串行变为并行，压榨性能极限</h4>
+                        PostgreSQL 向量查询和 ES 查询，要走两次不同的网络请求。我们使用了 <code>CompletableFuture</code> 开启异步并发，总耗时直接降到了 <code>MAX(T1, T2)</code>。<br><br>
+                        <strong>高可用降级（Try-Catch）：</strong> 如果 ES 所在的那台服务器挂了，系统会抛出 <code>TimeoutException</code>。我们在 Catch 块里直接给一个空列表，让系统依靠剩下的一路向量查询继续走下去，绝不给用户返回 500 错误！
+                    </div>
+                </section>
+            </section>
+
+            <!-- PART 6: 后端核心机制 -->
+            <section>
+                <section>
+                    <h2>Part 6. 核心后端进阶机制</h2>
+                    <p>Agentic RAG、权限隔离、JWT防伪与防内存泄漏</p>
+                </section>
+
+                <section>
+                    <h3>RAG 的终极形态：大模型函数调用 (Agentic RAG)</h3>
+                    <div class="geek-card">
+                        <pre><code class="language-java" data-line-numbers="1-4|6-10">@Bean
+@Description("在知识库中检索相关文档。当提问涉及知识库时，调用此工具。")
+public Function&lt;KbSearchRequest, KbSearchResponse&gt; kbSearch() {
+    return request -> {
+        // 调用底层双路混合检索
+        List&lt;SearchResult&gt; results = hybridSearchService.search(
+                request.query(), request.knowledgeBaseId(), topK);
+        // ... 返回格式化后的字符串
+        return new KbSearchResponse(formatResults(results), null);
+    };
+}</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>从“死板执行”到“智能中枢”的飞跃</h4>
+                        传统的 Naive RAG 是极其死板的：不管用户问什么，系统都会去查数据库。这不仅浪费资源，还会干扰大模型的闲聊。<br><br>
+                        EviMind 利用了最新的 <strong>Function Calling</strong> 技术，进化到了 <strong>Agentic RAG</strong>。我们只需通过 <code>@Description</code> 注释告诉大模型这把工具的存在。接下来，<strong>是否要进行数据库搜索，完全由大模型自己决定！</strong> 这是未来 AI 系统的终极形态。
+                    </div>
+                </section>
+
+                <section>
+                    <h3>企业级多租户：绝对不容商量的鉴权隔离</h3>
+                    <div class="geek-card" style="border-left: 5px solid #ef4444;">
+                        <pre><code class="language-java" data-line-numbers="2-4|6-11">public KnowledgeBase update(KnowledgeBase kb) {
+    if (!isOwner(kb.getId())) {
+        throw new SecurityException("只有 OWNER 才能更新");
+    }
+}
+
+public boolean isOwner(Long kbId) {
+    Long userId = GroupContext.getUserId(); // 从 ThreadLocal 拿
+    return kbMemberMapper.selectCount(
+        new LambdaQueryWrapper&lt;KbMember&gt;()
+            .eq(KbMember::getKnowledgeBaseId, kbId)
+            .eq(KbMember::getUserId, userId)
+    ) > 0;
+}</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>防越权 (BOLA 漏洞) 是架构的底线</h4>
+                        如果黑客抓包把 <code>kbId</code> 改成了竞争对手公司的知识库 ID 企图进行破坏。<br><br>
+                        在 <code>KnowledgeBaseService</code> 中，所有写操作的第一行，永远是 <code>!isOwner()</code> 判断！系统绝对不信任前端传来的用户身份，而是严格从经过 JWT 解码的 <code>ThreadLocal</code> 中提取身份，并在数据库关系表中进行强校验。查不到？直接踢飞！
+                    </div>
+                </section>
+
+                <section>
+                    <h3>源码：JWT 双令牌签发防伪造</h3>
+                    <div class="geek-card" style="border-left: 5px solid #a855f7;">
+                        <pre><code class="language-java" data-line-numbers="1-3|6-10">private SecretKey getSigningKey() {
+    return Keys.hmacShaKeyFor(jwtConfig.getSecret().getBytes(UTF_8));
+}
+
+public String generateAccessToken(Long userId, String username, String role) {
+    return Jwts.builder()
+            .subject(userId.toString())
+            .claim("role", role)      // 暴露的业务数据
+            .signWith(getSigningKey()) // ★ 无法伪造的防线！
+            .compact();
+}</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>无状态架构的杀手锏：数字签名</h4>
+                        JWT 的神奇之处在于：后端验证用户的请求时，<strong>不需要去查数据库验证他到底是谁！</strong><br>
+                        我们在发令牌时使用了只有服务器端自己知道的极高强度 SecretKey，对数据进行了 HMAC-SHA256 加密签名。黑客改动了哪怕一个字母的 Payload，算出来的哈希值立刻对不上，直接报废踢出。这就是密码学带来的极致信任。
+                    </div>
+                </section>
+                
+                <section>
+                    <h3>ThreadLocal 的天使与魔鬼</h3>
+                    <div class="geek-card">
+                        <pre><code class="language-java" data-line-numbers="2|4|6-8">protected void doFilterInternal(...) {
+    GroupContext.setContext(userId, groupId, role);
+    try {
+        filterChain.doFilter(request, response); // 放行请求
+    } finally {
+        // ⚠️ 极其致命的清理！
+        GroupContext.clear();
+    }
+}</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>为什么 finally 绝对不能漏？</h4>
+                        Tomcat 使用的是<strong>线程池</strong>技术。这意味着一个 HTTP 请求处理完后，处理它的那个线程<strong>不会被销毁</strong>。如果你不在 <code>finally</code> 里把包含凭证的 ThreadLocal 清空，下一个完全不同的用户不小心复用了这个线程，他就能直接读取到上一个用户的身份凭证，导致极其严重的越权访问漏洞！
+                    </div>
+                </section>
+            </section>
+
+            <!-- PART 7: 前端剖析 -->
+            <section>
+                <section>
+                    <h2>Part 7. 前端流式传输揭秘</h2>
+                    <p>Pinia 与 防踩踏刷新</p>
+                </section>
+
+                <section>
+                    <h3>Vue 3 + Pinia：手撕流式打字机效果</h3>
+                    <div class="geek-card">
+                        <pre><code class="language-typescript" data-line-numbers="1-2|4-6|8-11">async function sendMessage(content: string) {
+  messages.value.push({ role: 'user', content }); 
+  
+  // 推入一个“空的”AI消息占位符
+  const aiMsg = { role: 'assistant', content: '', citations: [] };
+  messages.value.push(aiMsg);
+  
+  // 监听网络事件的死循环
+  while(true) {
+    aiMsg.content += payload.text; // ★ 瞬间触发界面重绘！
+  }
+}</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>化繁为简的响应式哲学</h4>
+                        只要我们把一个对象 <code>aiMsg</code> 推入了响应式数组里，接下来哪怕只是极其简单的一句字符串拼接 <code>aiMsg.content += '好'</code>，Vue 底层的 Proxy 代理就会瞬间捕捉到这个变化，极其高效地触发渲染。一行代码，就实现了肉眼可见的高频打字机效果。
+                    </div>
+                </section>
+                
+                <section>
+                    <h3>JWT 无感刷新：防踩踏并发死锁</h3>
+                    <div class="geek-card">
+                        <pre><code class="language-typescript" data-line-numbers="1-2|5-8|11-14">let isRefreshing = false; // 全局锁
+let requestsQueue = [];   // 被挂起的请求回调队列
+
+axios.interceptors.response.use(res => res, async (error) => {
+    if (error.response.status === 401 && isRefreshing) {
+        // 别人在刷新，把自己挂起到队列里，返回暂未兑现的 Promise
+        return new Promise(resolve => requestsQueue.push(newToken => resolve(axios(...))));
+    }
+    
+    // 我是第一个发现 401 的，我来刷新
+    isRefreshing = true;
+    const newToken = await doRefresh(); 
+    requestsQueue.forEach(cb => cb(newToken)); // 唤醒被挂起的兄弟
+    requestsQueue = []; isRefreshing = false;
+});</code></pre>
+                    </div>
+                    <div class="lecturer-notes">
+                        <h4>什么是“刷新踩踏”？</h4>
+                        通过引入 <code>isRefreshing</code> 这个**全局闭包锁**，在多个请求同时遇到 401 的瞬间，只有第一个请求负责去换新钥匙，其余请求全被推入内存数组中“休眠等待”。等钥匙一到手，批量分发唤醒重试，完美实现“并发无感”操作！
+                    </div>
+                </section>
+                
+            </section>
+
+            <!-- PART 8: 总结 -->
+            <section>
+                <section>
+                    <h2>Part 8. 结语</h2>
+                </section>
+                
+                <section>
+                    <h3>真正的企业级开发，难在哪里？</h3>
+                    <div class="lecturer-notes" style="font-size: 0.9em; padding: 40px; border-left: 6px solid #6366f1;">
+                        看完了这么多行代码与架构图，你会发现：写出一个“能运行”的 RAG 也就是几百行 Python 脚本调个 API 的事。但要写出一个<strong>“能经受企业环境考验”</strong>的系统，却难如登天。<br><br>
+                        真正的核心竞争力，就在于这套“全栈工业级架构选型”中：<br>
+                        📌 你的架构是否先进？（Agentic RAG 函数调用自动调度）<br>
+                        📌 你是否防住了极其隐蔽的越权漏洞？（KnowledgeBaseService.isOwner 强拦截）<br>
+                        📌 你是否考虑了网络超时的优雅降级？（CompletableFuture 并发编程）<br>
+                        📌 你的数据库能承受高频的引用列表连表查询吗？（PostgreSQL JSONB 逆天性能）<br>
+                        📌 你的多租户上下文鉴权会不会导致内存泄漏？（ThreadLocal finally 必须 clear）<br><br>
+                        这些藏在冰山下的严苛细节，才是 <strong>EviMind</strong> 这套源码真正的价值所在。
+                    </div>
+                </section>
+
+                <section>
+                    <h3 style="font-size: 2em; margin-bottom: 30px;">Thanks for watching.</h3>
+                    <p class="hl-green">愿这套源码能成为您通向高级架构师的垫脚石。</p>
+                </section>
+
+            </section>
+
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/highlight/highlight.min.js"></script>
+    <script>
+        Reveal.initialize({
+            controls: true,
+            progress: true,
+            center: true,
+            hash: true,
+            slideNumber: 'c/t',    
+            transition: 'slide',   
+            plugins: [ RevealHighlight ]
+        });
+    </script>
+</body>
+</html>

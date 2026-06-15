@@ -1,6 +1,7 @@
 package com.example.evimind.document;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.evimind.audit.Auditable;
 import com.example.evimind.mapper.DocumentChunkMapper;
 import com.example.evimind.model.dto.ApiResponse;
 import com.example.evimind.model.entity.Document;
@@ -20,6 +21,7 @@ public class DocumentController {
     private final DocumentService documentService;
     private final DocumentChunkMapper documentChunkMapper;
 
+    @Auditable(action = "DOCUMENT_UPLOAD", resourceType = "DOCUMENT")
     @PostMapping("/upload")
     public ResponseEntity<ApiResponse<Document>> upload(
             @RequestParam("file") MultipartFile file,
@@ -51,12 +53,14 @@ public class DocumentController {
         return ResponseEntity.ok(ApiResponse.success(chunks));
     }
 
+    @Auditable(action = "DOCUMENT_DELETE", resourceType = "DOCUMENT", resourceIdExpression = "#id")
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         documentService.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
+    @Auditable(action = "DOCUMENT_RETRY", resourceType = "DOCUMENT", resourceIdExpression = "#id")
     @PostMapping("/{id}/retry")
     public ResponseEntity<ApiResponse<Void>> retryIngestion(@PathVariable Long id) {
         documentService.retryIngestion(id);

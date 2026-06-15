@@ -1,29 +1,29 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 echo "=========================================="
-echo "  evimind 独立包构建脚本"
+echo "  EviMind standalone build"
 echo "=========================================="
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "[1/3] 构建前端..."
+echo "[1/3] Building frontend..."
 cd "$SCRIPT_DIR/frontend"
 npm install
 npm run build
 
-echo "[2/3] 复制前端到后端..."
+echo "[2/3] Copying frontend into backend static resources..."
 cd "$SCRIPT_DIR"
 rm -rf src/main/resources/static
 cp -r frontend/dist src/main/resources/static
-echo "前端文件已复制"
+echo "Frontend files copied."
 
-echo "[3/3] 构建后端 JAR..."
+echo "[3/3] Building backend JAR..."
 ./mvnw package -DskipTests -q
 
 echo ""
 echo "=========================================="
-echo "  构建完成！"
-echo "  输出: target/evimind-0.0.1-SNAPSHOT.jar"
-echo "  启动: ./start.sh"
+echo "  Build complete"
+echo "  Output: target/evimind-0.0.1-SNAPSHOT.jar"
+echo "  Start: ./start.sh"
 echo "=========================================="

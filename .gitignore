@@ -13,3 +13,8 @@ frontend/dist/
 frontend/node_modules/
 *.db
 .superpowers/
+
+# Code quality tool caches
+.pmd
+.pmd.cache
+.spotless-*

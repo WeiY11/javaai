@@ -98,11 +98,14 @@ public class ConversationService {
 
         String modelProvider = conv.getModelProvider() != null ? conv.getModelProvider() : "deepseek";
 
+        // 构建对话历史字符串，用于 Query Rewrite（核心改写能力）
+        String conversationHistory = buildConversationHistory(conversationId);
+
         StringBuilder fullContent = new StringBuilder();
         String[] citationsHolder = new String[1];
 
         return ragPipeline.streamQuery(content, conv.getKnowledgeBaseId(), modelProvider,
-                temperature, topP, maxTokens, modelName, thinking, reasoningEffort)
+                temperature, topP, maxTokens, modelName, thinking, reasoningEffort, conversationHistory)
                 .map(event -> {
                     try {
                         @SuppressWarnings("unchecked")
@@ -263,6 +266,31 @@ public class ConversationService {
         } catch (Exception e) {
             log.warn("Failed to generate auto title for conversation {}", conversationId, e);
         }
+    }
+
+    /**
+     * 构建对话历史字符串，用于 Query Rewrite。
+     * 格式为 "role: content" 每行一条消息，最多返回最近 10 条。
+     */
+    private String buildConversationHistory(Long conversationId) {
+        List<Message> recentMessages = messageMapper.selectList(
+                new LambdaQueryWrapper<Message>()
+                        .eq(Message::getConversationId, conversationId)
+                        .orderByDesc(Message::getCreatedAt)
+                        .last("LIMIT " + SUMMARY_WINDOW)
+        );
+        if (recentMessages.isEmpty()) {
+            return "";
+        }
+        java.util.Collections.reverse(recentMessages);
+
+        StringBuilder history = new StringBuilder();
+        for (Message msg : recentMessages) {
+            if (msg.getRole() != null && msg.getContent() != null) {
+                history.append(msg.getRole()).append(": ").append(msg.getContent()).append("\n");
+            }
+        }
+        return history.toString().trim();
     }
 
     private void checkAndGenerateSummary(Long conversationId) {

@@ -10,6 +10,7 @@ import com.example.evimind.model.entity.Document;
 import com.example.evimind.model.entity.KbMember;
 import com.example.evimind.model.entity.KnowledgeBase;
 import com.example.evimind.retrieval.HybridSearchService;
+import com.example.evimind.retrieval.Reranker;
 import com.example.evimind.retrieval.SearchResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -22,6 +23,18 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * RAG Pipeline — 检索增强生成的核心编排服务。
+ *
+ * 完整链路：
+ *   Query Rewrite → Hybrid Search (pgvector + ES) → RRF Fusion → Reranker →
+ *   Evidence Sufficiency Gate → Evidence Portfolio Selection → LLM Generation
+ *
+ * 面试点：
+ * - 四阶段检索（Rewrite → Recall → Fuse → Rerank）是工业级 RAG 的标准架构
+ * - Evidence Sufficiency Gate 通过加权置信度判断抑制幻觉
+ * - Evidence Portfolio Selector 使用贪心集合覆盖算法优化证据多样性和覆盖率
+ */
 @Slf4j
 @Service
 public class RagPipeline {
@@ -38,13 +51,27 @@ public class RagPipeline {
     private PromptTemplateManager promptTemplateManager;
     @Autowired
     private Map<String, ChatClient> chatClients;
+    @Autowired(required = false)
+    private Reranker reranker;
+    @Autowired(required = false)
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     @Value("${custom.rag.max-evidence-context-chars:6000}")
     private int maxEvidenceContextChars = 6000;
 
+    @Value("${custom.rag.reranker.enabled:true}")
+    private boolean rerankerEnabled = true;
+
+    @Value("${custom.rag.reranker.top-n:5}")
+    private int rerankerTopN = 5;
+
     private final EvidencePortfolioSelector evidencePortfolioSelector = new EvidencePortfolioSelector();
 
     public RagResponse query(String userQuery, Long knowledgeBaseId) {
+        return query(userQuery, knowledgeBaseId, null);
+    }
+
+    public RagResponse query(String userQuery, Long knowledgeBaseId, String conversationHistory) {
         requireKbMember(knowledgeBaseId);
 
         KnowledgeBase kb = knowledgeBaseMapper.selectById(knowledgeBaseId);
@@ -52,7 +79,13 @@ public class RagPipeline {
             throw new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId);
         }
 
-        List<SearchResult> results = hybridSearchService.search(userQuery, knowledgeBaseId, 10);
+        // Step 1-3: Query Rewrite + Hybrid Search + RRF Fusion
+        long searchStart = System.nanoTime();
+        List<SearchResult> results = hybridSearchService.search(userQuery, knowledgeBaseId, 10, conversationHistory);
+        if (meterRegistry != null) {
+            meterRegistry.timer("rag.search.backend.duration", "backend", "hybrid")
+                    .record(System.nanoTime() - searchStart, java.util.concurrent.TimeUnit.NANOSECONDS);
+        }
         RagResponse response = new RagResponse();
 
         if (results.isEmpty()) {
@@ -61,13 +94,21 @@ public class RagPipeline {
             return response;
         }
 
+        // Step 4: Reranker（精排）
+        if (rerankerEnabled && reranker != null && results.size() > 1) {
+            results = reranker.rerank(userQuery, results, rerankerTopN);
+            log.debug("After reranking: {} results", results.size());
+        }
+
         if (!hasSufficientEvidence(results, kb.getEvidenceThreshold())) {
             response.setEvidenceStatus(RagResponse.EvidenceStatus.INSUFFICIENT);
             response.setAnswer(renderInsufficientPrompt(userQuery));
+            if (meterRegistry != null) meterRegistry.counter("rag.evidence.status", "status", "INSUFFICIENT").increment();
             return response;
         }
 
         response.setEvidenceStatus(RagResponse.EvidenceStatus.SUFFICIENT);
+        if (meterRegistry != null) meterRegistry.counter("rag.evidence.status", "status", "SUFFICIENT").increment();
 
         List<SearchResult> evidencePortfolio = selectEvidencePortfolio(userQuery, results);
         String prompt = renderEvidencePrompt(userQuery, evidencePortfolio);
@@ -88,12 +129,35 @@ public class RagPipeline {
     }
 
     public Flux<String> streamQuery(String userQuery, Long knowledgeBaseId, String modelProvider) {
-        return streamQuery(userQuery, knowledgeBaseId, modelProvider, null, null, null, null, null, null);
+        return streamQuery(userQuery, knowledgeBaseId, modelProvider,
+                null, null, null, null, null, null, null);
     }
 
     public Flux<String> streamQuery(String userQuery, Long knowledgeBaseId, String modelProvider,
                                     Double temperature, Double topP, Integer maxTokens,
                                     String modelName, Boolean thinking, String reasoningEffort) {
+        return streamQuery(userQuery, knowledgeBaseId, modelProvider,
+                temperature, topP, maxTokens, modelName, thinking, reasoningEffort, null);
+    }
+
+    /**
+     * 流式 RAG 问答，支持对话历史驱动的查询改写和重排序。
+     *
+     * @param userQuery           用户查询
+     * @param knowledgeBaseId     知识库 ID
+     * @param modelProvider       AI 模型提供商
+     * @param temperature         温度参数
+     * @param topP                Top-P 采样参数
+     * @param maxTokens           最大生成 token 数
+     * @param modelName           模型名称
+     * @param thinking            是否启用思考模式
+     * @param reasoningEffort     推理努力程度
+     * @param conversationHistory 对话历史（null 或空则跳过改写）
+     */
+    public Flux<String> streamQuery(String userQuery, Long knowledgeBaseId, String modelProvider,
+                                    Double temperature, Double topP, Integer maxTokens,
+                                    String modelName, Boolean thinking, String reasoningEffort,
+                                    String conversationHistory) {
         requireKbMember(knowledgeBaseId);
 
         KnowledgeBase kb = knowledgeBaseMapper.selectById(knowledgeBaseId);
@@ -101,15 +165,33 @@ public class RagPipeline {
             return Flux.just(StreamEvent.error("Knowledge base not found: " + knowledgeBaseId));
         }
 
+        // Step 1-3: Query Rewrite + Hybrid Search + RRF Fusion
         List<SearchResult> results;
         try {
-            results = hybridSearchService.search(userQuery, knowledgeBaseId, 10);
+            results = hybridSearchService.search(userQuery, knowledgeBaseId, 10, conversationHistory);
         } catch (Exception e) {
             log.error("Hybrid search failed", e);
             return Flux.just(StreamEvent.error("Search failed: " + e.getMessage()));
         }
 
-        if (results.isEmpty() || !hasSufficientEvidence(results, kb.getEvidenceThreshold())) {
+        if (results.isEmpty()) {
+            return Flux.just(
+                    StreamEvent.token(renderInsufficientPrompt(userQuery)),
+                    StreamEvent.done(null)
+            );
+        }
+
+        // Step 4: Reranker（精排）
+        if (rerankerEnabled && reranker != null && results.size() > 1) {
+            try {
+                results = reranker.rerank(userQuery, results, rerankerTopN);
+                log.debug("After reranking: {} results", results.size());
+            } catch (Exception e) {
+                log.warn("Reranker failed, proceeding with RRF-ordered results", e);
+            }
+        }
+
+        if (!hasSufficientEvidence(results, kb.getEvidenceThreshold())) {
             return Flux.just(
                     StreamEvent.token(renderInsufficientPrompt(userQuery)),
                     StreamEvent.done(null)

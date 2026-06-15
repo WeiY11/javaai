@@ -47,6 +47,12 @@ public class EtlPipeline {
     private ElasticsearchIndexService elasticsearchIndexService;
     @Autowired(required = false)
     private AcademicPdfMetadataExtractor academicMetadataExtractor;
+    @Autowired(required = false)
+    private com.example.evimind.service.CitationNetworkService citationNetworkService;
+    @Autowired(required = false)
+    private EntityRelationExtractor entityRelationExtractor;
+    @Autowired(required = false)
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     @Autowired
     private com.example.evimind.service.DocumentChunkService documentChunkService;
@@ -62,6 +68,7 @@ public class EtlPipeline {
         }
 
         try {
+            long etlStart = System.nanoTime();
             updateStatus(doc, "EXTRACTING");
             String rawText = extract(doc);
             log.info("Extracted {} chars from document {}", rawText.length(), documentId);
@@ -79,6 +86,19 @@ public class EtlPipeline {
                     }
                 } catch (Exception e) {
                     log.warn("Paper metadata extraction failed for document {}: {}", documentId, e.getMessage());
+                }
+
+                // Extract citation network from PDF references section
+                if (citationNetworkService != null) {
+                    try {
+                        int citationCount = citationNetworkService.extractAndSaveCitations(
+                                documentId, rawText, doc.getKnowledgeBaseId());
+                        if (citationCount > 0) {
+                            log.info("Extracted {} citation links from document {}", citationCount, documentId);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Citation extraction failed for document {}: {}", documentId, e.getMessage());
+                    }
                 }
             }
 
@@ -123,15 +143,35 @@ public class EtlPipeline {
             updateStatus(doc, "INDEXING");
             elasticsearchIndexService.indexChunks(savedChunks, doc.getKnowledgeBaseId(), doc.getId());
 
+            // Knowledge graph enrichment: extract entity-relation triples
+            if (entityRelationExtractor != null && cleanedText.length() > 100) {
+                try {
+                    int triples = entityRelationExtractor.extractAndSave(
+                            documentId, doc.getKnowledgeBaseId(), cleanedText);
+                    if (triples > 0) {
+                        log.info("Extracted {} knowledge graph triples from document {}", triples, documentId);
+                    }
+                } catch (Exception e) {
+                    log.warn("Knowledge graph extraction failed for document {}: {}", documentId, e.getMessage());
+                }
+            }
+
             doc.setIngestionStatus("COMPLETED");
             doc.setChunkCount(chunks.size());
             documentMapper.updateById(doc);
+            if (meterRegistry != null) {
+                meterRegistry.timer("etl.document.duration").record(System.nanoTime() - etlStart, java.util.concurrent.TimeUnit.NANOSECONDS);
+                meterRegistry.counter("etl.document.status", "status", "SUCCESS").increment();
+            }
             log.info("ETL pipeline completed for document {}", documentId);
 
         } catch (Exception e) {
             log.error("ETL pipeline failed for document {}", documentId, e);
             doc.setIngestionStatus("FAILED");
             documentMapper.updateById(doc);
+            if (meterRegistry != null) {
+                meterRegistry.counter("etl.document.status", "status", "FAILED").increment();
+            }
         }
     }
 
@@ -185,6 +225,22 @@ public class EtlPipeline {
                 new LambdaQueryWrapper<DocumentChunk>()
                         .eq(DocumentChunk::getDocumentId, documentId)
         );
+        // Delete citation links associated with this document
+        if (citationNetworkService != null) {
+            try {
+                citationNetworkService.deleteCitationsForDocument(documentId);
+            } catch (Exception e) {
+                log.warn("Failed to delete citation links for document {}: {}", documentId, e.getMessage());
+            }
+        }
+        // Delete knowledge graph data for this document
+        if (entityRelationExtractor != null) {
+            try {
+                entityRelationExtractor.cleanExisting(documentId);
+            } catch (Exception e) {
+                log.warn("Failed to delete KG data for document {}: {}", documentId, e.getMessage());
+            }
+        }
         embeddingService.deleteByDocumentId(documentId);
         elasticsearchIndexService.deleteByDocumentId(documentId);
         if (minioStorageService != null) {

@@ -39,6 +39,18 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/academic',
+      name: 'Academic',
+      component: () => import('../views/AcademicGraphView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/knowledge-graph',
+      name: 'KnowledgeGraph',
+      component: () => import('../views/KnowledgeGraphView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/notes',
       name: 'Notes',
       component: () => import('../views/NotesView.vue'),

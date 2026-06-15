@@ -1,13 +1,15 @@
 spring:
   application:
     name: evimind
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:evimind}
     driver-class-name: org.postgresql.Driver
     username: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
   jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
     hibernate:
       ddl-auto: validate
     show-sql: false
@@ -44,6 +46,8 @@ jwt:
   refresh-token-expiration: 604800000
 
 custom:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173}
   ai:
     embedding:
       enabled: true
@@ -74,10 +78,31 @@ custom:
         temperature: 0.7
   data:
     base-dir: ${DATA_BASE_DIR:/data}
+  kg:
+    enabled: ${KG_ENABLED:true}
+    extraction:
+      timeout-ms: ${KG_EXTRACTION_TIMEOUT_MS:60000}
+      max-text-chars: 4000
+      max-entities: 50
+  extractor:
+    ocr:
+      enabled: ${EXTRACTOR_OCR_ENABLED:false}
+      tessdata-path: ${EXTRACTOR_OCR_TESSDATA_PATH:tessdata}
+      language: ${EXTRACTOR_OCR_LANGUAGE:chi_sim+eng}
   rag:
     max-evidence-context-chars: ${RAG_MAX_EVIDENCE_CONTEXT_CHARS:6000}
     search:
       backend-timeout-ms: ${RAG_SEARCH_BACKEND_TIMEOUT_MS:1500}
+    query-rewrite:
+      enabled: ${RAG_QUERY_REWRITE_ENABLED:true}
+      timeout-ms: ${RAG_QUERY_REWRITE_TIMEOUT_MS:3000}
+      max-history-messages: 10
+    reranker:
+      enabled: ${RAG_RERANKER_ENABLED:true}
+      type: prompt
+      timeout-ms: ${RAG_RERANKER_TIMEOUT_MS:5000}
+      max-candidates: 10
+      top-n: 5
   analysis:
     max-content-size: 512000
     max-prompt-size: 100000
@@ -88,6 +113,22 @@ custom:
 
 server:
   port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        rag.query.duration: true
+        etl.document.duration: true
 
 logging:
   level:

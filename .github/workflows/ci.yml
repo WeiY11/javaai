@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  build:
+    name: Build & Test (Java ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: ['21']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: temurin
+          cache: maven
+
+      - name: Cache Maven local repo
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Compile
+        run: ./mvnw -B -q compile
+
+      - name: Spotless Format Check
+        run: ./mvnw -B spotless:check
+        continue-on-error: true
+
+      - name: Test + JaCoCo Coverage
+        env:
+          SKIP_INTEGRATION_TESTS: "true"
+        run: ./mvnw -B verify -DskipITs
+
+      - name: Upload JaCoCo Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report-java${{ matrix.java }}
+          path: target/site/jacoco/
+          retention-days: 30
+
+      - name: Upload PMD Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pmd-report-java${{ matrix.java }}
+          path: target/pmd.xml
+          retention-days: 30
+
+      - name: Upload SpotBugs/Spotless Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotless-report-java${{ matrix.java }}
+          path: target/spotless-*
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ──────────────────────────────────────
+  # Frontend type-check (parallel job)
+  # ──────────────────────────────────────
+  frontend:
+    name: Frontend Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check (vue-tsc)
+        run: npx vue-tsc --noEmit
+
+      - name: Build frontend
+        run: npm run build

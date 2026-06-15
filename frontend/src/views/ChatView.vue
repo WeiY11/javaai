@@ -127,10 +127,19 @@
           <el-input
             v-model="inputText"
             placeholder="输入问题，EviMind 会基于知识库证据回答"
-            :disabled="chatStore.isLoading"
+            :disabled="chatStore.isStreaming"
             @keyup.enter="handleSend"
           />
-          <el-button type="primary" :loading="chatStore.isLoading" @click="handleSend">发送</el-button>
+          <el-button v-if="chatStore.isStreaming" type="danger" @click="handleStop">停止生成</el-button>
+          <el-button v-else type="primary" :loading="chatStore.isLoading" @click="handleSend">发送</el-button>
+        </div>
+        <div class="action-bar">
+          <el-button text size="small" @click="handleExport('markdown')" :disabled="!chatStore.currentConversation || chatStore.messages.length === 0">
+            导出 Markdown
+          </el-button>
+          <el-button text size="small" @click="handleExport('json')" :disabled="!chatStore.currentConversation || chatStore.messages.length === 0">
+            导出 JSON
+          </el-button>
         </div>
       </template>
     </section>
@@ -168,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
@@ -193,6 +202,38 @@ const thinking = ref(true)
 const reasoningEffort = ref('medium')
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true })
+
+// MutationObserver：流式输出时自动滚动到底部
+let scrollObserver: MutationObserver | null = null
+
+onMounted(async () => {
+  // 自动滚动 observer
+  scrollObserver = new MutationObserver(() => {
+    if (chatStore.isStreaming && messagesRef.value) {
+      messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+    }
+  })
+  if (messagesRef.value) {
+    scrollObserver.observe(messagesRef.value, { childList: true, subtree: true, characterData: true })
+  }
+
+  // 加载数据
+  chatStore.loadConversations()
+  kbStore.loadKnowledgeBases()
+  try {
+    const res = await getModels()
+    availableModels.value = res || []
+    if (availableModels.value.length > 0 && !availableModels.value.find(m => m.provider === modelProvider.value)) {
+      modelProvider.value = availableModels.value[0].provider
+    }
+  } catch (e) {
+    console.error('Failed to load models', e)
+  }
+})
+
+onUnmounted(() => {
+  scrollObserver?.disconnect()
+})
 
 const filteredConversations = computed(() => {
   if (!searchQuery.value) return chatStore.conversations
@@ -263,21 +304,34 @@ async function finishRename() {
   renaming.value = false
 }
 
-onMounted(async () => {
-  chatStore.loadConversations()
-  kbStore.loadKnowledgeBases()
+/**
+ * 中止当前流式生成。
+ * 面试点：AbortController 中止 SSE 流的用户控制。
+ */
+function handleStop() {
+  chatStore.stopGenerating()
+}
+
+/**
+ * 导出当前对话为 Markdown 或 JSON 文件并下载。
+ */
+async function handleExport(format: 'markdown' | 'json') {
   try {
-    const res = await getModels()
-    // The API might wrap it in ApiResponse or just return data depending on the interceptor.
-    // In request.ts, the interceptor usually returns response.data.data
-    availableModels.value = res || []
-    if (availableModels.value.length > 0 && !availableModels.value.find(m => m.provider === modelProvider.value)) {
-      modelProvider.value = availableModels.value[0].provider
-    }
-  } catch (e) {
-    console.error('Failed to load models', e)
+    const content = await chatStore.exportCurrentConversation(format)
+    const ext = format === 'json' ? 'json' : 'md'
+    const mime = format === 'json' ? 'application/json' : 'text/markdown'
+    const blob = new Blob([content], { type: mime })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${chatStore.currentConversation?.title || 'conversation'}.${ext}`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch (e: any) {
+    ElMessage.error(e.message || '导出失败')
   }
-})
+}
 </script>
 
 <style scoped>
@@ -452,6 +506,13 @@ onMounted(async () => {
   gap: 10px;
   border-top: 1px solid var(--border-soft);
   padding-top: 12px;
+}
+
+.action-bar {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 4px;
 }
 
 .typing-indicator {
