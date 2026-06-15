@@ -104,7 +104,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
@@ -170,9 +170,6 @@ function renderChart(data: CitationGraph) {
   if (!chartInstance) {
     chartInstance = echarts.init(chartRef.value)
   }
-
-  const docNodes = data.nodes.filter(n => n.type === 'document')
-  const citedNodes = data.nodes.filter(n => n.type === 'cited')
 
   // Count incoming edges for sizing
   const inDegree: Record<string, number> = {}

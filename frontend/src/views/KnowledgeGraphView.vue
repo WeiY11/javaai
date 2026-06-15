@@ -101,7 +101,7 @@ import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { useKnowledgeBaseStore } from '../stores/knowledge-base.store'
 import * as kgApi from '../api/knowledge-graph'
-import type { GraphData, KgStats, NeighborData, PathStep } from '../api/knowledge-graph'
+import type { GraphData, KgStats, PathStep } from '../api/knowledge-graph'
 
 const kbStore = useKnowledgeBaseStore()
 const selectedKbId = ref<number>()
