@@ -1,31 +1,33 @@
 package com.example.evimind.model.entity;
 
-import com.baomidou.mybatisplus.annotation.*;
-import lombok.Data;
 import java.time.LocalDateTime;
+
+import com.baomidou.mybatisplus.annotation.*;
+
+import lombok.Data;
 
 @Data
 @TableName("conversation")
 public class Conversation {
 
-    @TableId(type = IdType.AUTO)
-    private Long id;
+  @TableId(type = IdType.AUTO)
+  private Long id;
 
-    private Long userId;
+  private Long userId;
 
-    private Long knowledgeBaseId;
+  private Long knowledgeBaseId;
 
-    private String modelProvider;
+  private String modelProvider;
 
-    private String title;
+  private String title;
 
-    private String summary;
+  private String summary;
 
-    private String status;
+  private String status;
 
-    @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
+  @TableField(fill = FieldFill.INSERT)
+  private LocalDateTime createdAt;
 
-    @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedAt;
+  @TableField(fill = FieldFill.INSERT_UPDATE)
+  private LocalDateTime updatedAt;
 }

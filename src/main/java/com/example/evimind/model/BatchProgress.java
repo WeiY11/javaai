@@ -1,45 +1,87 @@
 package com.example.evimind.model;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-
 import java.time.LocalDateTime;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 public class BatchProgress {
 
-    private String taskId;
-    private int totalCount;
-    private int completedCount;
-    private String currentFile;
-    private String status; // RUNNING / COMPLETED / FAILED
-    private String errorMessage;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime startTime;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime endTime;
+  private String taskId;
+  private int totalCount;
+  private int completedCount;
+  private String currentFile;
+  private String status; // RUNNING / COMPLETED / FAILED
+  private String errorMessage;
 
-    public BatchProgress() {}
+  @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+  private LocalDateTime startTime;
 
-    public String getTaskId() { return taskId; }
-    public void setTaskId(String taskId) { this.taskId = taskId; }
+  @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+  private LocalDateTime endTime;
 
-    public int getTotalCount() { return totalCount; }
-    public void setTotalCount(int totalCount) { this.totalCount = totalCount; }
+  public BatchProgress() {}
 
-    public int getCompletedCount() { return completedCount; }
-    public void setCompletedCount(int completedCount) { this.completedCount = completedCount; }
+  public String getTaskId() {
+    return taskId;
+  }
 
-    public String getCurrentFile() { return currentFile; }
-    public void setCurrentFile(String currentFile) { this.currentFile = currentFile; }
+  public void setTaskId(String taskId) {
+    this.taskId = taskId;
+  }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+  public int getTotalCount() {
+    return totalCount;
+  }
 
-    public String getErrorMessage() { return errorMessage; }
-    public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+  public void setTotalCount(int totalCount) {
+    this.totalCount = totalCount;
+  }
 
-    public LocalDateTime getStartTime() { return startTime; }
-    public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
+  public int getCompletedCount() {
+    return completedCount;
+  }
 
-    public LocalDateTime getEndTime() { return endTime; }
-    public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
+  public void setCompletedCount(int completedCount) {
+    this.completedCount = completedCount;
+  }
+
+  public String getCurrentFile() {
+    return currentFile;
+  }
+
+  public void setCurrentFile(String currentFile) {
+    this.currentFile = currentFile;
+  }
+
+  public String getStatus() {
+    return status;
+  }
+
+  public void setStatus(String status) {
+    this.status = status;
+  }
+
+  public String getErrorMessage() {
+    return errorMessage;
+  }
+
+  public void setErrorMessage(String errorMessage) {
+    this.errorMessage = errorMessage;
+  }
+
+  public LocalDateTime getStartTime() {
+    return startTime;
+  }
+
+  public void setStartTime(LocalDateTime startTime) {
+    this.startTime = startTime;
+  }
+
+  public LocalDateTime getEndTime() {
+    return endTime;
+  }
+
+  public void setEndTime(LocalDateTime endTime) {
+    this.endTime = endTime;
+  }
 }

@@ -5,7 +5,7 @@ import java.nio.file.Path;
 
 public interface FileContentExtractor {
 
-    boolean supports(String fileName);
+  boolean supports(String fileName);
 
-    ExtractionResult extract(Path filePath, int maxSize) throws IOException;
+  ExtractionResult extract(Path filePath, int maxSize) throws IOException;
 }

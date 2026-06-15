@@ -4,18 +4,33 @@ import java.util.List;
 
 public class BatchAnalysisRequest {
 
-    private List<String> paths;
-    private String provider;
-    private String sessionId;
+  private List<String> paths;
+  private String provider;
+  private String sessionId;
 
-    public BatchAnalysisRequest() {}
+  public BatchAnalysisRequest() {}
 
-    public List<String> getPaths() { return paths; }
-    public void setPaths(List<String> paths) { this.paths = paths; }
+  public List<String> getPaths() {
+    return paths;
+  }
 
-    public String getProvider() { return provider; }
-    public void setProvider(String provider) { this.provider = provider; }
+  public void setPaths(List<String> paths) {
+    this.paths = paths;
+  }
 
-    public String getSessionId() { return sessionId; }
-    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+  public String getProvider() {
+    return provider;
+  }
+
+  public void setProvider(String provider) {
+    this.provider = provider;
+  }
+
+  public String getSessionId() {
+    return sessionId;
+  }
+
+  public void setSessionId(String sessionId) {
+    this.sessionId = sessionId;
+  }
 }

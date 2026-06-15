@@ -1,9 +1,9 @@
 package com.example.evimind.mapper;
 
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.example.evimind.model.entity.KbMember;
 import org.apache.ibatis.annotations.Mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.example.evimind.model.entity.KbMember;
+
 @Mapper
-public interface KbMemberMapper extends BaseMapper<KbMember> {
-}
+public interface KbMemberMapper extends BaseMapper<KbMember> {}
