@@ -17,7 +17,7 @@
     <spring-ai.version>1.0.0-M1</spring-ai.version>
     <mybatis-plus.version>3.5.12</mybatis-plus.version>
     <jjwt.version>0.12.6</jjwt.version>
-    <minio.version>8.5.14</minio.version>
+    <minio.version>9.0.3</minio.version>
   </properties>
   <dependencyManagement>
     <dependencies>
