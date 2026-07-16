@@ -74,7 +74,7 @@ public class AiDataTools {
         }
         return new ListDirectoryResponse(items, null);
       } catch (Exception e) {
-        return new ListDirectoryResponse(null, "获取目录失败: " + e.getMessage());
+        return new ListDirectoryResponse(null, "Unable to list directory.");
       }
     };
   }
@@ -97,7 +97,7 @@ public class AiDataTools {
         ExtractionResult extraction =
             fileExtractorService.extractFile(target, analysisProperties.getMaxPromptSize());
         if (!extraction.isSuccess()) {
-          return new ReadFileResponse(null, "提取失败: " + extraction.getErrorMessage());
+          return new ReadFileResponse(null, "File extraction failed.");
         }
         String content = extraction.getContent();
         if (content.length() > 50000) {
@@ -105,7 +105,7 @@ public class AiDataTools {
         }
         return new ReadFileResponse(content, null);
       } catch (Exception e) {
-        return new ReadFileResponse(null, "读取文件失败: " + e.getMessage());
+        return new ReadFileResponse(null, "Unable to read file.");
       }
     };
   }
@@ -127,7 +127,7 @@ public class AiDataTools {
         }
         return new QueryAnalysisResponse(results.get(0).getContent(), null);
       } catch (Exception e) {
-        return new QueryAnalysisResponse(null, "查询历史记录失败: " + e.getMessage());
+        return new QueryAnalysisResponse(null, "Unable to query analysis history.");
       }
     };
   }

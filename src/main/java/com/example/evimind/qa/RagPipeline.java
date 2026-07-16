@@ -7,8 +7,10 @@ import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.stereotype.Service;
 
+import com.example.evimind.config.AiClientResolver;
 import com.example.evimind.config.PromptTemplateManager;
 import com.example.evimind.identity.GroupContext;
 import com.example.evimind.mapper.DocumentMapper;
@@ -190,8 +192,8 @@ public class RagPipeline {
     try {
       results = hybridSearchService.search(userQuery, knowledgeBaseId, 10, conversationHistory);
     } catch (Exception e) {
-      log.error("Hybrid search failed", e);
-      return Flux.just(StreamEvent.error("Search failed: " + e.getMessage()));
+      log.error("Hybrid search failed ({})", e.getClass().getSimpleName());
+      return Flux.just(StreamEvent.error("Search failed. Please try again."));
     }
 
     if (results.isEmpty()) {
@@ -205,7 +207,9 @@ public class RagPipeline {
         results = reranker.rerank(userQuery, results, rerankerTopN);
         log.debug("After reranking: {} results", results.size());
       } catch (Exception e) {
-        log.warn("Reranker failed, proceeding with RRF-ordered results", e);
+        log.warn(
+            "Reranker failed, proceeding with RRF-ordered results ({})",
+            e.getClass().getSimpleName());
       }
     }
 
@@ -294,7 +298,9 @@ public class RagPipeline {
 
   private void requireKbMember(Long knowledgeBaseId) {
     Long userId = GroupContext.getUserId();
-    if (userId == null) return;
+    if (userId == null) {
+      throw new AuthenticationCredentialsNotFoundException("Not authenticated");
+    }
     Long count =
         kbMemberMapper.selectCount(
             new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KbMember>()
@@ -318,17 +324,11 @@ public class RagPipeline {
   }
 
   private ChatClient resolveChatClient() {
-    if (chatClients != null && !chatClients.isEmpty()) {
-      return chatClients.values().iterator().next();
-    }
-    return null;
+    return AiClientResolver.resolve(chatClients, null);
   }
 
   private ChatClient resolveChatClient(String provider) {
-    if (chatClients != null && provider != null && chatClients.containsKey(provider)) {
-      return chatClients.get(provider);
-    }
-    return resolveChatClient();
+    return AiClientResolver.resolve(chatClients, provider);
   }
 
   private List<RagResponse.Citation> buildCitations(List<SearchResult> results) {

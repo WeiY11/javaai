@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +57,7 @@ public class TaskSchedulerService {
   @Transactional
   public ScheduledTask createTask(
       String name, String cronExpression, String taskType, Map<String, Object> config) {
+    requireAdministrator();
     ScheduledTask task = new ScheduledTask();
     task.setName(name);
     task.setCronExpression(cronExpression);
@@ -71,6 +73,7 @@ public class TaskSchedulerService {
 
   @Transactional
   public void pauseTask(Long taskId) {
+    requireAdministrator();
     ScheduledTask task = taskMapper.selectById(taskId);
     if (task == null) throw new IllegalArgumentException("Task not found: " + taskId);
     task.setStatus("PAUSED");
@@ -79,6 +82,7 @@ public class TaskSchedulerService {
 
   @Transactional
   public void resumeTask(Long taskId) {
+    requireAdministrator();
     ScheduledTask task = taskMapper.selectById(taskId);
     if (task == null) throw new IllegalArgumentException("Task not found: " + taskId);
     task.setStatus("ACTIVE");
@@ -88,11 +92,13 @@ public class TaskSchedulerService {
 
   @Transactional
   public void deleteTask(Long taskId) {
+    requireAdministrator();
     taskMapper.deleteById(taskId);
   }
 
   @Transactional
   public void runNow(Long taskId) {
+    requireAdministrator();
     ScheduledTask task = taskMapper.selectById(taskId);
     if (task == null) throw new IllegalArgumentException("Task not found: " + taskId);
     executeTask(task);
@@ -102,13 +108,21 @@ public class TaskSchedulerService {
   }
 
   public IPage<ScheduledTask> listTasks(int page, int size) {
+    requireAdministrator();
     return taskMapper.selectPage(
         new Page<>(page, size),
         new LambdaQueryWrapper<ScheduledTask>().orderByDesc(ScheduledTask::getCreatedAt));
   }
 
   public List<ScheduledTask> listActiveTasks() {
+    requireAdministrator();
     return taskMapper.findAllActive();
+  }
+
+  private void requireAdministrator() {
+    if (!GroupContext.isAdmin()) {
+      throw new SecurityException("Scheduler operations require an administrator.");
+    }
   }
 
   private void executeTask(ScheduledTask task) {
@@ -120,10 +134,19 @@ public class TaskSchedulerService {
     executor.execute(task);
   }
 
-  private LocalDateTime calculateNextRun(String cronExpression) {
-    // Simple next-run estimation: add 1 hour as default
-    // In production, use a CronExpression parser
-    return LocalDateTime.now().plusHours(1);
+  LocalDateTime calculateNextRun(String cronExpression) {
+    return calculateNextRun(cronExpression, LocalDateTime.now());
+  }
+
+  LocalDateTime calculateNextRun(String cronExpression, LocalDateTime now) {
+    if (cronExpression == null || cronExpression.isBlank()) {
+      throw new IllegalArgumentException("Cron expression must not be blank");
+    }
+    LocalDateTime next = CronExpression.parse(cronExpression).next(now);
+    if (next == null) {
+      throw new IllegalArgumentException("Cron expression has no next execution time");
+    }
+    return next;
   }
 
   private String toJson(Map<String, Object> map) {

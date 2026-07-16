@@ -1,12 +1,12 @@
 package com.example.evimind.ingestion;
 
 import java.io.InputStream;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.evimind.extractor.ExtractionResult;
@@ -26,6 +26,16 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 public class EtlPipeline {
+
+  private static final List<String> RUNNING_STAGES =
+      List.of(
+          "EXTRACTING",
+          "CLEANING",
+          "CHUNKING",
+          "PERSISTING",
+          "EMBEDDING",
+          "INDEXING",
+          "ENRICHING");
 
   @Autowired private DocumentMapper documentMapper;
   @Autowired private DocumentChunkMapper documentChunkMapper;
@@ -60,89 +70,45 @@ public class EtlPipeline {
   @Autowired
   private java.util.Map<String, org.springframework.ai.chat.client.ChatClient> chatClients;
 
-  @Transactional
   public void processDocument(Long documentId) {
+    int claimed = documentMapper.claimIngestion(documentId);
+    if (claimed == 0) {
+      Document current = documentMapper.selectById(documentId);
+      if (current == null) {
+        throw new IllegalArgumentException("Document not found: " + documentId);
+      }
+      if (RUNNING_STAGES.contains(current.getIngestionStatus())) {
+        log.info(
+            "Document {} ingestion is already running at stage {}",
+            documentId,
+            current.getIngestionStatus());
+        return;
+      }
+      throw new IllegalStateException("Unable to claim ingestion for document " + documentId);
+    }
+
     Document doc = documentMapper.selectById(documentId);
     if (doc == null) {
       throw new IllegalArgumentException("Document not found: " + documentId);
     }
 
+    String currentStage = "EXTRACTING";
     try {
       long etlStart = System.nanoTime();
-      updateStatus(doc, "EXTRACTING");
       String rawText = extract(doc);
       log.info("Extracted {} chars from document {}", rawText.length(), documentId);
 
-      if (academicMetadataExtractor != null && "pdf".equalsIgnoreCase(doc.getFileFormat())) {
-        try {
-          PaperMetadata metadata = academicMetadataExtractor.extract(rawText, doc.getFileName());
-          if (metadata != null) {
-            if (metadata.getDoi() != null) doc.setDoi(metadata.getDoi());
-            if (metadata.getAuthors() != null)
-              doc.setAuthors(String.join(", ", metadata.getAuthors()));
-            if (metadata.getYear() != null) doc.setPublicationYear(metadata.getYear());
-            if (metadata.getJournal() != null) doc.setJournal(metadata.getJournal());
-            documentMapper.updateById(doc);
-            log.info(
-                "Extracted paper metadata for document {}: title={}, doi={}",
-                documentId,
-                metadata.getTitle(),
-                metadata.getDoi());
-          }
-        } catch (Exception e) {
-          log.warn(
-              "Paper metadata extraction failed for document {}: {}", documentId, e.getMessage());
-        }
-
-        // Extract citation network from PDF references section
-        if (citationNetworkService != null) {
-          try {
-            int citationCount =
-                citationNetworkService.extractAndSaveCitations(
-                    documentId, rawText, doc.getKnowledgeBaseId());
-            if (citationCount > 0) {
-              log.info("Extracted {} citation links from document {}", citationCount, documentId);
-            }
-          } catch (Exception e) {
-            log.warn("Citation extraction failed for document {}: {}", documentId, e.getMessage());
-          }
-        }
-      }
-
-      updateStatus(doc, "CLEANING");
+      currentStage = "CLEANING";
+      updateStatus(doc, currentStage);
       String cleanedText = textCleaner.clean(rawText);
       log.info("Cleaned to {} chars from document {}", cleanedText.length(), documentId);
 
-      // --- NEW: Generate Document Summary ---
-      try {
-        org.springframework.ai.chat.client.ChatClient chatClient =
-            chatClients.getOrDefault(
-                "deepseek", chatClients.values().stream().findFirst().orElse(null));
-        if (chatClient != null && cleanedText.length() > 50) {
-          String contextText = cleanedText.substring(0, Math.min(3000, cleanedText.length()));
-          String summary =
-              chatClient
-                  .prompt()
-                  .system(
-                      "你是一个专业的文档分析助手。请根据提供的文档开头内容，提取并凝练出一份简洁的文档简介（控制在 200 字以内）。如果提供的文本看起来全是乱码或无有效内容，请回复：暂无有效摘要。")
-                  .user(contextText)
-                  .call()
-                  .content();
-          if (summary != null && !summary.isBlank()) {
-            doc.setSummary(summary.trim());
-            documentMapper.updateById(doc);
-            log.info(
-                "Generated summary for document {}: {}",
-                documentId,
-                summary.length() > 50 ? summary.substring(0, 50) + "..." : summary);
-          }
-        }
-      } catch (Exception e) {
-        log.warn("Failed to generate summary for document {}: {}", documentId, e.getMessage());
-      }
-
-      updateStatus(doc, "CHUNKING");
+      currentStage = "CHUNKING";
+      updateStatus(doc, currentStage);
       KnowledgeBase kb = knowledgeBaseMapper.selectById(doc.getKnowledgeBaseId());
+      if (kb == null) {
+        throw new IllegalStateException("Knowledge base not found: " + doc.getKnowledgeBaseId());
+      }
       DocumentChunker.ChunkConfig config = new DocumentChunker.ChunkConfig();
       config.setChunkSize(kb.getChunkSize());
       config.setOverlap(kb.getChunkOverlap());
@@ -150,32 +116,32 @@ public class EtlPipeline {
       List<String> chunks = documentChunker.chunk(cleanedText, config);
       log.info("Chunked into {} pieces for document {}", chunks.size(), documentId);
 
+      currentStage = "PERSISTING";
+      updateStatus(doc, currentStage);
       List<DocumentChunk> savedChunks = saveChunks(doc, chunks);
 
-      updateStatus(doc, "EMBEDDING");
+      currentStage = "EMBEDDING";
+      updateStatus(doc, currentStage);
       embeddingService.embedAndStore(savedChunks);
 
-      updateStatus(doc, "INDEXING");
+      currentStage = "INDEXING";
+      updateStatus(doc, currentStage);
       elasticsearchIndexService.indexChunks(savedChunks, doc.getKnowledgeBaseId(), doc.getId());
 
-      // Knowledge graph enrichment: extract entity-relation triples
-      if (entityRelationExtractor != null && cleanedText.length() > 100) {
-        try {
-          int triples =
-              entityRelationExtractor.extractAndSave(
-                  documentId, doc.getKnowledgeBaseId(), cleanedText);
-          if (triples > 0) {
-            log.info("Extracted {} knowledge graph triples from document {}", triples, documentId);
-          }
-        } catch (Exception e) {
-          log.warn(
-              "Knowledge graph extraction failed for document {}: {}", documentId, e.getMessage());
-        }
-      }
+      currentStage = "ENRICHING";
+      updateStatus(doc, currentStage);
+      enrichDocument(doc, rawText, cleanedText);
 
       doc.setIngestionStatus("COMPLETED");
+      doc.setFailedStage(null);
+      doc.setErrorCode(null);
+      doc.setErrorMessage(null);
       doc.setChunkCount(chunks.size());
+      doc.setActiveIngestionVersion(doc.getIngestionVersion());
+      doc.setFinishedAt(LocalDateTime.now());
       documentMapper.updateById(doc);
+      cleanupInactiveVersions(doc);
+
       if (meterRegistry != null) {
         meterRegistry
             .timer("etl.document.duration")
@@ -183,14 +149,15 @@ public class EtlPipeline {
         meterRegistry.counter("etl.document.status", "status", "SUCCESS").increment();
       }
       log.info("ETL pipeline completed for document {}", documentId);
-
     } catch (Exception e) {
-      log.error("ETL pipeline failed for document {}", documentId, e);
-      doc.setIngestionStatus("FAILED");
-      documentMapper.updateById(doc);
+      log.error("ETL pipeline failed for document {} ({})", documentId, e.getClass().getSimpleName());
+      markFailed(doc, currentStage, e);
       if (meterRegistry != null) {
         meterRegistry.counter("etl.document.status", "status", "FAILED").increment();
       }
+      throw e instanceof RuntimeException
+          ? (RuntimeException) e
+          : new RuntimeException("ETL pipeline failed", e);
     }
   }
 
@@ -198,9 +165,11 @@ public class EtlPipeline {
     if (minioStorageService == null && localFileStorageService == null) {
       throw new RuntimeException("No storage service available");
     }
+    java.nio.file.Path tempFile = null;
     try {
-      java.nio.file.Path tempFile =
-          java.nio.file.Files.createTempFile("etl_", "_" + doc.getFileName());
+      tempFile =
+          java.nio.file.Files.createTempFile(
+              "etl_", "_" + doc.getId() + "." + doc.getFileFormat());
       try (InputStream is =
           minioStorageService != null
               ? minioStorageService.downloadFile(doc.getStoragePath())
@@ -208,13 +177,20 @@ public class EtlPipeline {
         java.nio.file.Files.copy(is, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
       }
       ExtractionResult result = fileExtractorService.extractFile(tempFile, Integer.MAX_VALUE);
-      java.nio.file.Files.deleteIfExists(tempFile);
       if (!result.isSuccess()) {
         throw new RuntimeException("Extraction failed: " + result.getErrorMessage());
       }
       return result.getContent();
     } catch (Exception e) {
       throw new RuntimeException("File extraction failed", e);
+    } finally {
+      if (tempFile != null) {
+        try {
+          java.nio.file.Files.deleteIfExists(tempFile);
+        } catch (Exception cleanupError) {
+          log.warn("Failed to delete ETL temp file {}", tempFile, cleanupError);
+        }
+      }
     }
   }
 
@@ -226,6 +202,7 @@ public class EtlPipeline {
       chunk.setKnowledgeBaseId(doc.getKnowledgeBaseId());
       chunk.setContent(chunks.get(i));
       chunk.setChunkIndex(i);
+      chunk.setIngestionVersion(doc.getIngestionVersion());
       saved.add(chunk);
     }
     documentChunkService.saveBatch(saved, 100);
@@ -237,14 +214,131 @@ public class EtlPipeline {
     documentMapper.updateById(doc);
   }
 
-  @Transactional
+  private void markFailed(Document doc, String failedStage, Exception e) {
+    doc.setIngestionStatus("FAILED");
+    doc.setFailedStage(failedStage);
+    doc.setErrorCode(e.getClass().getSimpleName());
+    doc.setErrorMessage("Ingestion failed during " + failedStage + ". Please retry.");
+    doc.setFinishedAt(LocalDateTime.now());
+    documentMapper.updateById(doc);
+  }
+
+  private void enrichDocument(Document doc, String rawText, String cleanedText) {
+    extractPaperMetadata(doc, rawText);
+    extractCitations(doc, rawText);
+    generateSummary(doc, cleanedText);
+    extractKnowledgeGraph(doc, cleanedText);
+  }
+
+  private void extractPaperMetadata(Document doc, String rawText) {
+    if (academicMetadataExtractor == null || !"pdf".equalsIgnoreCase(doc.getFileFormat())) {
+      return;
+    }
+    try {
+      PaperMetadata metadata = academicMetadataExtractor.extract(rawText, doc.getFileName());
+      if (metadata != null) {
+        if (metadata.getDoi() != null) doc.setDoi(metadata.getDoi());
+        if (metadata.getAuthors() != null) {
+          doc.setAuthors(String.join(", ", metadata.getAuthors()));
+        }
+        if (metadata.getYear() != null) doc.setPublicationYear(metadata.getYear());
+        if (metadata.getJournal() != null) doc.setJournal(metadata.getJournal());
+        documentMapper.updateById(doc);
+        log.info(
+            "Extracted paper metadata for document {}: title={}, doi={}",
+            doc.getId(),
+            metadata.getTitle(),
+            metadata.getDoi());
+      }
+    } catch (Exception e) {
+      log.warn("Paper metadata extraction failed for document {}: {}", doc.getId(), e.getMessage());
+    }
+  }
+
+  private void extractCitations(Document doc, String rawText) {
+    if (citationNetworkService == null || !"pdf".equalsIgnoreCase(doc.getFileFormat())) {
+      return;
+    }
+    try {
+      int citationCount =
+          citationNetworkService.extractAndSaveCitations(
+              doc.getId(), rawText, doc.getKnowledgeBaseId());
+      if (citationCount > 0) {
+        log.info("Extracted {} citation links from document {}", citationCount, doc.getId());
+      }
+    } catch (Exception e) {
+      log.warn("Citation extraction failed for document {}: {}", doc.getId(), e.getMessage());
+    }
+  }
+
+  private void generateSummary(Document doc, String cleanedText) {
+    try {
+      if (chatClients == null || chatClients.isEmpty()) {
+        return;
+      }
+      org.springframework.ai.chat.client.ChatClient chatClient =
+          chatClients.getOrDefault(
+              "deepseek", chatClients.values().stream().findFirst().orElse(null));
+      if (chatClient != null && cleanedText.length() > 50) {
+        String contextText = cleanedText.substring(0, Math.min(3000, cleanedText.length()));
+        String summary =
+            chatClient
+                .prompt()
+                .system(
+                    "Summarize the document in no more than 200 Chinese characters. "
+                        + "If the text is unreadable, reply: \u6682\u65e0\u6709\u6548\u6458\u8981\u3002")
+                .user(contextText)
+                .call()
+                .content();
+        if (summary != null && !summary.isBlank()) {
+          doc.setSummary(summary.trim());
+          documentMapper.updateById(doc);
+          log.info("Generated summary for document {}", doc.getId());
+        }
+      }
+    } catch (Exception e) {
+      log.warn("Failed to generate summary for document {}: {}", doc.getId(), e.getMessage());
+    }
+  }
+
+  private void extractKnowledgeGraph(Document doc, String cleanedText) {
+    if (entityRelationExtractor == null || cleanedText.length() <= 100) {
+      return;
+    }
+    try {
+      int triples =
+          entityRelationExtractor.extractAndSave(doc.getId(), doc.getKnowledgeBaseId(), cleanedText);
+      if (triples > 0) {
+        log.info("Extracted {} knowledge graph triples from document {}", triples, doc.getId());
+      }
+    } catch (Exception e) {
+      log.warn("Knowledge graph extraction failed for document {}: {}", doc.getId(), e.getMessage());
+    }
+  }
+
+  private void cleanupInactiveVersions(Document doc) {
+    try {
+      elasticsearchIndexService.deleteInactiveVersions(doc.getId(), doc.getActiveIngestionVersion());
+    } catch (Exception e) {
+      log.warn("Failed to delete stale ES entries for document {}: {}", doc.getId(), e.getMessage());
+    }
+    try {
+      int deleted =
+          documentChunkMapper.deleteInactiveVersions(doc.getId(), doc.getActiveIngestionVersion());
+      if (deleted > 0) {
+        log.info("Deleted {} inactive chunks for document {}", deleted, doc.getId());
+      }
+    } catch (Exception e) {
+      log.warn("Failed to delete inactive chunks for document {}: {}", doc.getId(), e.getMessage());
+    }
+  }
+
   public void deleteDocument(Long documentId) {
     Document doc = documentMapper.selectById(documentId);
     if (doc == null) return;
 
     documentChunkMapper.delete(
         new LambdaQueryWrapper<DocumentChunk>().eq(DocumentChunk::getDocumentId, documentId));
-    // Delete citation links associated with this document
     if (citationNetworkService != null) {
       try {
         citationNetworkService.deleteCitationsForDocument(documentId);
@@ -252,7 +346,6 @@ public class EtlPipeline {
         log.warn("Failed to delete citation links for document {}: {}", documentId, e.getMessage());
       }
     }
-    // Delete knowledge graph data for this document
     if (entityRelationExtractor != null) {
       try {
         entityRelationExtractor.cleanExisting(documentId);

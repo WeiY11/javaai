@@ -58,6 +58,7 @@ public class ElasticsearchIndexService {
                 "knowledgeBaseId", knowledgeBaseId,
                 "documentId", documentId,
                 "chunkIndex", chunkIndex,
+                "ingestionVersion", chunk.getIngestionVersion(),
                 "chunkId", chunkId);
         operations.add(
             BulkOperation.of(b -> b.index(idx -> idx.index(INDEX_NAME).id(chunkId).document(doc))));
@@ -70,6 +71,33 @@ public class ElasticsearchIndexService {
           knowledgeBaseId);
     } catch (IOException e) {
       log.error("Failed to index chunks in Elasticsearch", e);
+      throw new RuntimeException("Failed to index chunks in Elasticsearch", e);
+    }
+  }
+
+  public void deleteInactiveVersions(Long documentId, Integer activeVersion) {
+    if (elasticsearchClient == null || activeVersion == null) return;
+    try {
+      elasticsearchClient.deleteByQuery(
+          d ->
+              d.index(INDEX_NAME)
+                  .query(
+                      q ->
+                          q.bool(
+                              b ->
+                                  b.filter(
+                                          f ->
+                                              f.term(
+                                                  t ->
+                                                      t.field("documentId").value(documentId)))
+                                      .mustNot(
+                                          mn ->
+                                              mn.term(
+                                                  t ->
+                                                      t.field("ingestionVersion")
+                                                          .value(activeVersion))))));
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to delete stale ES index for document " + documentId, e);
     }
   }
 

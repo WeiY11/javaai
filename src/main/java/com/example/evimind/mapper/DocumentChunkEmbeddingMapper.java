@@ -17,7 +17,9 @@ public interface DocumentChunkEmbeddingMapper extends BaseMapper<DocumentChunkEm
           + "1 - (dce.embedding <=> #{queryEmbedding}::vector) AS score "
           + "FROM document_chunk_embedding dce "
           + "JOIN document_chunk dc ON dc.id = dce.chunk_id "
+          + "JOIN document d ON d.id = dc.document_id "
           + "WHERE dce.knowledge_base_id = #{knowledgeBaseId} "
+          + "AND d.active_ingestion_version = dc.ingestion_version "
           + "ORDER BY dce.embedding <=> #{queryEmbedding}::vector "
           + "LIMIT #{limit}")
   List<ChunkSimilarityResult> findSimilarChunks(

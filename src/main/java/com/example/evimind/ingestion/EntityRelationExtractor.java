@@ -2,15 +2,18 @@ package com.example.evimind.ingestion;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.evimind.config.AiClientResolver;
 import com.example.evimind.mapper.KgEntityMapper;
 import com.example.evimind.mapper.KgRelationMapper;
 import com.example.evimind.model.entity.KgEntity;
@@ -18,19 +21,31 @@ import com.example.evimind.model.entity.KgRelation;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /** 基于 LLM 的实体-关系抽取器。 从文档文本中提取 (实体, 关系, 实体) 三元组，构建知识图谱。 */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EntityRelationExtractor {
 
   private final KgEntityMapper entityMapper;
   private final KgRelationMapper relationMapper;
   private final Map<String, ChatClient> chatClients;
   private final ObjectMapper objectMapper;
+  private final Executor llmExecutor;
+
+  public EntityRelationExtractor(
+      KgEntityMapper entityMapper,
+      KgRelationMapper relationMapper,
+      Map<String, ChatClient> chatClients,
+      ObjectMapper objectMapper,
+      @Qualifier("llmTaskExecutor") Executor llmExecutor) {
+    this.entityMapper = entityMapper;
+    this.relationMapper = relationMapper;
+    this.chatClients = chatClients;
+    this.objectMapper = objectMapper;
+    this.llmExecutor = llmExecutor;
+  }
 
   @Value("${custom.kg.enabled:true}")
   private boolean kgEnabled;
@@ -82,7 +97,8 @@ public class EntityRelationExtractor {
                       .system("你是一个专业的知识图谱构建助手。请从文本中提取实体和关系，严格按照指定的 JSON 格式输出。")
                       .user(prompt)
                       .call()
-                      .content());
+                      .content(),
+              llmExecutor);
 
       String response = future.get(extractionTimeoutMs, TimeUnit.MILLISECONDS);
       if (response == null || response.isBlank()) {
@@ -96,7 +112,10 @@ public class EntityRelationExtractor {
       log.warn("Entity-relation extraction timed out for document {}", documentId);
       return 0;
     } catch (Exception e) {
-      log.warn("Entity-relation extraction failed for document {}: {}", documentId, e.getMessage());
+      log.warn(
+          "Entity-relation extraction failed for document {} ({})",
+          documentId,
+          e.getClass().getSimpleName());
       return 0;
     }
   }
@@ -219,9 +238,9 @@ public class EntityRelationExtractor {
 
     } catch (Exception e) {
       log.warn(
-          "Failed to parse entity-relation extraction response for document {}: {}",
+          "Failed to parse entity-relation extraction response for document {} ({})",
           documentId,
-          e.getMessage());
+          e.getClass().getSimpleName());
       return 0;
     }
   }
@@ -241,8 +260,6 @@ public class EntityRelationExtractor {
   }
 
   private ChatClient resolveChatClient() {
-    if (chatClients == null || chatClients.isEmpty()) return null;
-    if (chatClients.containsKey("deepseek")) return chatClients.get("deepseek");
-    return chatClients.values().iterator().next();
+    return AiClientResolver.resolve(chatClients, null);
   }
 }

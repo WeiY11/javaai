@@ -2,6 +2,7 @@ package com.example.evimind.service;
 
 import java.util.List;
 
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +23,7 @@ public class ResearchNoteService {
 
   @Transactional
   public ResearchNote create(ResearchNote note) {
-    note.setUserId(GroupContext.getUserId());
+    note.setUserId(requireAuthenticatedUser());
     researchNoteMapper.insert(note);
     return note;
   }
@@ -44,28 +45,38 @@ public class ResearchNoteService {
   }
 
   public List<ResearchNote> listByChunk(Long chunkId) {
+    Long userId = requireAuthenticatedUser();
     return researchNoteMapper.selectList(
         new LambdaQueryWrapper<ResearchNote>()
             .eq(ResearchNote::getChunkId, chunkId)
+            .eq(ResearchNote::getUserId, userId)
             .orderByDesc(ResearchNote::getCreatedAt));
   }
 
   public List<ResearchNote> listByDocument(Long documentId) {
-    Long userId = GroupContext.getUserId();
+    Long userId = requireAuthenticatedUser();
     return researchNoteMapper.selectList(
         new LambdaQueryWrapper<ResearchNote>()
             .eq(ResearchNote::getDocumentId, documentId)
-            .eq(userId != null, ResearchNote::getUserId, userId)
+            .eq(ResearchNote::getUserId, userId)
             .orderByDesc(ResearchNote::getCreatedAt));
   }
 
   private ResearchNote requireOwner(Long id) {
+    Long userId = requireAuthenticatedUser();
     ResearchNote note = researchNoteMapper.selectById(id);
     if (note == null) throw new IllegalArgumentException("Research note not found: " + id);
-    Long userId = GroupContext.getUserId();
-    if (userId != null && !userId.equals(note.getUserId())) {
+    if (!userId.equals(note.getUserId())) {
       throw new SecurityException("Access denied: you do not own this note");
     }
     return note;
+  }
+
+  private Long requireAuthenticatedUser() {
+    Long userId = GroupContext.getUserId();
+    if (userId == null) {
+      throw new AuthenticationCredentialsNotFoundException("Not authenticated");
+    }
+    return userId;
   }
 }

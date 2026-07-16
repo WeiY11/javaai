@@ -48,6 +48,12 @@ jwt:
 custom:
   cors:
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173}
+  kb:
+    search:
+      max-top-k: ${KB_SEARCH_MAX_TOP_K:20}
+      candidate-multiplier: ${KB_SEARCH_CANDIDATE_MULTIPLIER:2}
+      reranker:
+        enabled: ${KB_SEARCH_RERANKER_ENABLED:true}
   ai:
     embedding:
       enabled: true
@@ -85,10 +91,14 @@ custom:
       max-text-chars: 4000
       max-entities: 50
   extractor:
+    pdf:
+      min-native-text-chars: ${EXTRACTOR_PDF_MIN_NATIVE_TEXT_CHARS:24}
     ocr:
       enabled: ${EXTRACTOR_OCR_ENABLED:false}
       tessdata-path: ${EXTRACTOR_OCR_TESSDATA_PATH:tessdata}
       language: ${EXTRACTOR_OCR_LANGUAGE:chi_sim+eng}
+      pdf-dpi: ${EXTRACTOR_OCR_PDF_DPI:220}
+      pdf-max-pages: ${EXTRACTOR_OCR_PDF_MAX_PAGES:20}
   rag:
     max-evidence-context-chars: ${RAG_MAX_EVIDENCE_CONTEXT_CHARS:6000}
     search:
@@ -122,6 +132,7 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+      roles: ADMIN
   metrics:
     tags:
       application: ${spring.application.name}
@@ -133,4 +144,4 @@ management:
 logging:
   level:
     com.example.evimind: INFO
-    org.springframework.ai: DEBUG
+    org.springframework.ai: INFO

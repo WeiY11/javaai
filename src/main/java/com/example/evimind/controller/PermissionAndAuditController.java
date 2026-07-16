@@ -26,6 +26,9 @@ public class PermissionAndAuditController {
   @GetMapping("/api/v1/documents/{docId}/permissions")
   public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPermissions(
       @PathVariable Long docId) {
+    Long currentUserId = GroupContext.getUserId();
+    documentPermissionService.requirePermission(
+        docId, currentUserId, DocumentPermissionService.PERM_ADMIN);
     List<Map<String, Object>> permissions = documentPermissionService.getDocumentPermissions(docId);
     return ResponseEntity.ok(ApiResponse.success(permissions));
   }

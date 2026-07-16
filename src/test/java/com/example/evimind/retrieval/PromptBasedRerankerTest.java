@@ -6,10 +6,11 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
@@ -21,7 +22,13 @@ class PromptBasedRerankerTest {
 
   @Mock private Map<String, ChatClient> chatClients;
 
-  @InjectMocks private PromptBasedReranker reranker;
+  private PromptBasedReranker reranker;
+
+  @BeforeEach
+  void setUp() {
+    Executor directExecutor = Runnable::run;
+    reranker = new PromptBasedReranker(chatClients, directExecutor);
+  }
 
   private List<SearchResult> sampleCandidates() {
     return List.of(
@@ -60,8 +67,6 @@ class PromptBasedRerankerTest {
     ReflectionTestUtils.setField(reranker, "maxCandidates", 10);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.containsKey("deepseek")).thenReturn(true);
     when(chatClients.get("deepseek")).thenReturn(chatClient);
     // LLM 认为第 3 个候选最相关，第 1 个次之，第 2 个最不相关
     when(chatClient.prompt().user(anyString()).call().content()).thenReturn("[6, 3, 9]");
@@ -86,8 +91,6 @@ class PromptBasedRerankerTest {
     ReflectionTestUtils.setField(reranker, "maxCandidates", 10);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.containsKey("deepseek")).thenReturn(true);
     when(chatClients.get("deepseek")).thenReturn(chatClient);
     when(chatClient.prompt().user(anyString()).call().content())
         .thenThrow(new RuntimeException("API error"));
@@ -107,8 +110,6 @@ class PromptBasedRerankerTest {
     ReflectionTestUtils.setField(reranker, "maxCandidates", 10);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.containsKey("deepseek")).thenReturn(true);
     when(chatClients.get("deepseek")).thenReturn(chatClient);
     // LLM 返回 2 个分数但期望 3 个
     when(chatClient.prompt().user(anyString()).call().content()).thenReturn("[8, 5]");
@@ -126,8 +127,6 @@ class PromptBasedRerankerTest {
     ReflectionTestUtils.setField(reranker, "maxCandidates", 10);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.containsKey("deepseek")).thenReturn(true);
     when(chatClients.get("deepseek")).thenReturn(chatClient);
     when(chatClient.prompt().user(anyString()).call().content()).thenReturn("[5, 9, 3]");
 
@@ -153,8 +152,6 @@ class PromptBasedRerankerTest {
     ReflectionTestUtils.setField(reranker, "maxCandidates", 10);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.containsKey("deepseek")).thenReturn(true);
     when(chatClients.get("deepseek")).thenReturn(chatClient);
     // LLM 返回带解释的分数
     when(chatClient.prompt().user(anyString()).call().content())

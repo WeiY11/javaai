@@ -2,7 +2,9 @@ package com.example.evimind.storage;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.annotation.PostConstruct;
 
@@ -55,6 +57,34 @@ public class MinioStorageService {
       log.error("Failed to check/create MinIO bucket", e);
       throw new RuntimeException("MinIO bucket initialization failed", e);
     }
+  }
+
+  public Map<String, Object> checkHealth() {
+    Map<String, Object> status = new LinkedHashMap<>();
+    if (minioClient == null || minioConfig == null) {
+      status.put("status", "NOT_CONFIGURED");
+      status.put("message", "MinIO storage service is not configured");
+      status.put(
+          "action", "Set MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, and MINIO_BUCKET");
+      return status;
+    }
+    try {
+      boolean bucketExists =
+          minioClient.bucketExists(
+              BucketExistsArgs.builder().bucket(minioConfig.getBucket()).build());
+      status.put("status", bucketExists ? "UP" : "DOWN");
+      status.put("bucket", minioConfig.getBucket());
+      if (!bucketExists) {
+        status.put("message", "MinIO bucket does not exist");
+        status.put("action", "Create the configured MINIO_BUCKET or check MinIO bucket permissions");
+      }
+    } catch (Exception e) {
+      status.put("status", "DOWN");
+      status.put("error", e.getMessage());
+      status.put("message", "MinIO health check failed");
+      status.put("action", "Check MinIO service, bucket permissions, and MINIO_ENDPOINT");
+    }
+    return status;
   }
 
   public String uploadFile(

@@ -53,9 +53,11 @@ public class DeepSeekHttpRequestInterceptor implements ClientHttpRequestIntercep
             return execution.execute(request, newBody);
           }
         }
-      } catch (Exception e) {
-        log.warn("Failed to intercept and modify DeepSeek request payload", e);
-      }
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to intercept and modify DeepSeek request payload ({})",
+                    e.getClass().getSimpleName());
+        }
     }
     return execution.execute(request, body);
   }

@@ -3,38 +3,60 @@ package com.example.evimind.service;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.evimind.config.AiClientResolver;
+import com.example.evimind.identity.GroupContext;
+import com.example.evimind.knowledgebase.KnowledgeBaseService;
 import com.example.evimind.mapper.*;
 import com.example.evimind.model.entity.*;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /** 自动化报告生成服务。 基于知识库的对话历史、文档分析结果和引用网络，生成结构化周报/月报。 */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AutoReportService {
 
-  private final KnowledgeBaseMapper knowledgeBaseMapper;
+  private final KnowledgeBaseService knowledgeBaseService;
   private final DocumentMapper documentMapper;
   private final ConversationMapper conversationMapper;
   private final MessageMapper messageMapper;
   private final Map<String, ChatClient> chatClients;
+  private final Executor llmExecutor;
+
+  public AutoReportService(
+      KnowledgeBaseService knowledgeBaseService,
+      DocumentMapper documentMapper,
+      ConversationMapper conversationMapper,
+      MessageMapper messageMapper,
+      Map<String, ChatClient> chatClients,
+      @Qualifier("llmTaskExecutor") Executor llmExecutor) {
+    this.knowledgeBaseService = knowledgeBaseService;
+    this.documentMapper = documentMapper;
+    this.conversationMapper = conversationMapper;
+    this.messageMapper = messageMapper;
+    this.chatClients = chatClients;
+    this.llmExecutor = llmExecutor;
+  }
 
   private static final long LLM_TIMEOUT_MS = 120_000;
 
   /** 生成知识库使用报告。 */
   public String generateReport(Long knowledgeBaseId, String period) {
-    KnowledgeBase kb = knowledgeBaseMapper.selectById(knowledgeBaseId);
+    KnowledgeBase kb = knowledgeBaseService.getById(knowledgeBaseId);
     if (kb == null)
       throw new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId);
+    if (!GroupContext.isAdmin() && !knowledgeBaseService.isOwner(knowledgeBaseId)) {
+      throw new SecurityException("Only the knowledge base owner can generate reports");
+    }
 
     LocalDateTime since =
         "monthly".equals(period)
@@ -61,12 +83,15 @@ public class AutoReportService {
                       .system("你是一个专业的数据分析助手。请根据提供的统计数据，生成一份结构化的知识库使用报告。")
                       .user(prompt)
                       .call()
-                      .content());
+                      .content(),
+              llmExecutor);
 
       String result = future.get(LLM_TIMEOUT_MS, TimeUnit.MILLISECONDS);
       return result != null ? result.trim() : buildFallbackReport(kb.getName(), period, stats);
     } catch (Exception e) {
-      log.warn("LLM report generation failed, using fallback: {}", e.getMessage());
+      log.warn(
+          "LLM report generation failed, using fallback ({})",
+          e.getClass().getSimpleName());
       return buildFallbackReport(kb.getName(), period, stats);
     }
   }
@@ -178,8 +203,6 @@ public class AutoReportService {
   }
 
   private ChatClient resolveChatClient() {
-    if (chatClients == null || chatClients.isEmpty()) return null;
-    if (chatClients.containsKey("deepseek")) return chatClients.get("deepseek");
-    return chatClients.values().iterator().next();
+    return AiClientResolver.resolve(chatClients, null);
   }
 }

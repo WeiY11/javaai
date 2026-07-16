@@ -5,10 +5,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.evimind.config.AiClientResolver;
 import com.example.evimind.config.PromptTemplateManager;
 import com.example.evimind.identity.GroupContext;
 import com.example.evimind.mapper.ConversationMapper;
@@ -51,10 +53,14 @@ public class ConversationService {
 
   @Transactional
   public Conversation createConversation(Long knowledgeBaseId, String modelProvider) {
+    Long userId = requireAuthenticatedUser();
+    String resolvedProvider =
+        AiClientResolver.resolveProviderName(chatClients, modelProvider)
+            .orElseThrow(() -> new IllegalArgumentException("AI model provider is not available."));
     Conversation conv = new Conversation();
-    conv.setUserId(GroupContext.getUserId());
+    conv.setUserId(userId);
     conv.setKnowledgeBaseId(knowledgeBaseId);
-    conv.setModelProvider(modelProvider);
+    conv.setModelProvider(resolvedProvider);
     conv.setStatus("ACTIVE");
     conversationMapper.insert(conv);
     return conv;
@@ -63,7 +69,10 @@ public class ConversationService {
   @Transactional
   public Message addMessage(
       Long conversationId, String role, String content, String citations, String toolCalls) {
-    requireConversationOwner(conversationId);
+    getOwnedConversation(conversationId);
+    if (!"user".equalsIgnoreCase(role)) {
+      throw new IllegalArgumentException("Only user messages may be added manually.");
+    }
     Message msg = new Message();
     msg.setConversationId(conversationId);
     msg.setRole(role);
@@ -89,7 +98,7 @@ public class ConversationService {
       String modelName,
       Boolean thinking,
       String reasoningEffort) {
-    Conversation conv = requireConversationOwner(conversationId);
+    Conversation conv = getOwnedConversation(conversationId);
 
     if (conv.getKnowledgeBaseId() == null) {
       return Flux.just(StreamEvent.error("请先选择知识库再发起对话"));
@@ -100,13 +109,18 @@ public class ConversationService {
           StreamEvent.error("Access denied: you are not a member of this knowledge base"));
     }
 
+    if (AiClientResolver.resolve(chatClients, conv.getModelProvider()) == null) {
+      return Flux.just(
+          StreamEvent.error("AI model not available. Please configure an AI provider."));
+    }
+
     Message userMsg = new Message();
     userMsg.setConversationId(conversationId);
     userMsg.setRole("user");
     userMsg.setContent(content);
     messageMapper.insert(userMsg);
 
-    String modelProvider = conv.getModelProvider() != null ? conv.getModelProvider() : "deepseek";
+    String modelProvider = conv.getModelProvider();
 
     // 构建对话历史字符串，用于 Query Rewrite（核心改写能力）
     String conversationHistory = buildConversationHistory(conversationId);
@@ -138,11 +152,10 @@ public class ConversationService {
                 } else if ("citations".equals(type)) {
                   citationsHolder[0] = objectMapper.writeValueAsString(map.get("citations"));
                 } else if ("done".equals(type)) {
-                  saveAssistantMessage(conversationId, fullContent.toString(), citationsHolder[0]);
                   return "{\"type\":\"done\",\"messageId\":" + map.get("messageId") + "}";
                 }
               } catch (JsonProcessingException e) {
-                log.warn("Failed to parse stream event", e);
+                log.warn("Failed to parse stream event ({})", e.getClass().getSimpleName());
               }
               return event;
             })
@@ -153,7 +166,13 @@ public class ConversationService {
               }
               checkAndGenerateSummary(conversationId);
             })
-        .doOnError(e -> log.error("Stream error for conversation {}", conversationId, e));
+        .doOnCancel(() -> log.info("Stream cancelled for conversation {}", conversationId))
+        .doOnError(
+            e ->
+                log.error(
+                    "Stream error for conversation {} ({})",
+                    conversationId,
+                    e.getClass().getSimpleName()));
   }
 
   private void saveAssistantMessage(Long conversationId, String content, String citations) {
@@ -167,7 +186,7 @@ public class ConversationService {
   }
 
   public List<Message> getHistory(Long conversationId) {
-    requireConversationOwner(conversationId);
+    getOwnedConversation(conversationId);
     return messageMapper.selectList(
         new LambdaQueryWrapper<Message>()
             .eq(Message::getConversationId, conversationId)
@@ -175,7 +194,7 @@ public class ConversationService {
   }
 
   public List<Conversation> listConversations() {
-    Long userId = GroupContext.getUserId();
+    Long userId = requireAuthenticatedUser();
     return conversationMapper.selectList(
         new LambdaQueryWrapper<Conversation>()
             .eq(Conversation::getUserId, userId)
@@ -185,7 +204,7 @@ public class ConversationService {
 
   @Transactional
   public void deleteConversation(Long conversationId) {
-    requireConversationOwner(conversationId);
+    getOwnedConversation(conversationId);
     Conversation conv = conversationMapper.selectById(conversationId);
     if (conv != null) {
       conv.setStatus("DELETED");
@@ -193,16 +212,27 @@ public class ConversationService {
     }
   }
 
-  private Conversation requireConversationOwner(Long conversationId) {
+  public Conversation getOwnedConversation(Long conversationId) {
     Conversation conv = conversationMapper.selectById(conversationId);
     if (conv == null) {
       throw new IllegalArgumentException("Conversation not found: " + conversationId);
     }
     Long userId = GroupContext.getUserId();
-    if (userId != null && !userId.equals(conv.getUserId())) {
+    if (userId == null) {
+      throw new AuthenticationCredentialsNotFoundException("Not authenticated");
+    }
+    if (!userId.equals(conv.getUserId())) {
       throw new SecurityException("Access denied: you do not own this conversation");
     }
     return conv;
+  }
+
+  private Long requireAuthenticatedUser() {
+    Long userId = GroupContext.getUserId();
+    if (userId == null) {
+      throw new AuthenticationCredentialsNotFoundException("Not authenticated");
+    }
+    return userId;
   }
 
   public String buildContext(Long conversationId, String currentQuery) {
@@ -238,25 +268,20 @@ public class ConversationService {
       String result = chatClient.prompt().user(summaryPrompt).call().content();
       return result != null && !result.isBlank() ? result : summaryPrompt;
     } catch (Exception e) {
-      log.warn("Failed to generate summary with AI, using prompt as fallback", e);
+      log.warn(
+          "Failed to generate summary with AI, using prompt as fallback ({})",
+          e.getClass().getSimpleName());
       return summaryPrompt;
     }
   }
 
   private ChatClient resolveChatClient() {
-    if (chatClients != null && !chatClients.isEmpty()) {
-      String provider = "deepseek";
-      if (chatClients.containsKey(provider)) {
-        return chatClients.get(provider);
-      }
-      return chatClients.values().iterator().next();
-    }
-    return null;
+    return AiClientResolver.resolve(chatClients, null);
   }
 
   @Transactional
   public Conversation renameConversation(Long conversationId, String title) {
-    Conversation conv = requireConversationOwner(conversationId);
+    Conversation conv = getOwnedConversation(conversationId);
     if (conv != null && title != null && !title.isBlank()) {
       conv.setTitle(title.trim());
       conversationMapper.updateById(conv);
@@ -284,7 +309,10 @@ public class ConversationService {
         }
       }
     } catch (Exception e) {
-      log.warn("Failed to generate auto title for conversation {}", conversationId, e);
+      log.warn(
+          "Failed to generate auto title for conversation {} ({})",
+          conversationId,
+          e.getClass().getSimpleName());
     }
   }
 

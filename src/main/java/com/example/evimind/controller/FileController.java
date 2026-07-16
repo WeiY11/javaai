@@ -192,7 +192,7 @@ public class FileController {
   @GetMapping(value = "/analyze", produces = MediaType.TEXT_EVENT_STREAM_VALUE + ";charset=UTF-8")
   public Flux<String> analyzeFile(
       @RequestParam("path") String filePath,
-      @RequestParam(value = "provider", defaultValue = "deepseek") String provider,
+      @RequestParam(value = "provider", required = false) String provider,
       @RequestParam(value = "sessionId", defaultValue = "analyze-session") String sessionId)
       throws IOException {
 

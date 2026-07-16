@@ -1,6 +1,6 @@
 package com.example.evimind.config;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.slf4j.LoggerFactory;
@@ -15,6 +15,7 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StringUtils;
 
 @Configuration
 public class AiConfig {
@@ -35,13 +36,22 @@ public class AiConfig {
   @Bean
   public Map<String, ChatClient> chatClients(
       org.springframework.web.client.RestClient.Builder restClientBuilder) {
-    Map<String, ChatClient> clients = new HashMap<>();
+    Map<String, ChatClient> clients = new LinkedHashMap<>();
 
     if (aiProperties.getProviders() != null) {
       for (Map.Entry<String, AiProperties.ProviderConfig> entry :
           aiProperties.getProviders().entrySet()) {
         String providerName = entry.getKey();
         AiProperties.ProviderConfig config = entry.getValue();
+
+        if (config == null
+            || !StringUtils.hasText(config.getBaseUrl())
+            || !StringUtils.hasText(config.getApiKey())
+            || !StringUtils.hasText(config.getModel())) {
+          LoggerFactory.getLogger(AiConfig.class)
+              .info("Skipping AI provider '{}' because its endpoint, API key, or model is missing", providerName);
+          continue;
+        }
 
         try {
           org.springframework.web.client.RestClient.Builder rcBuilder = restClientBuilder.clone();

@@ -33,7 +33,7 @@ public class MetricsConfig {
   public DistributionSummary ragEvidenceScoreSummary(MeterRegistry registry) {
     return DistributionSummary.builder("rag.evidence.score")
         .description("Evidence confidence score distribution")
-        .minimumExpectedValue(0.0)
+        .minimumExpectedValue(0.01)
         .maximumExpectedValue(1.0)
         .register(registry);
   }

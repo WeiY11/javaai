@@ -1,5 +1,7 @@
 package com.example.evimind.knowledgebase;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -7,6 +9,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.evimind.model.dto.ApiResponse;
 import com.example.evimind.model.entity.KbMember;
 import com.example.evimind.model.entity.KnowledgeBase;
+import com.example.evimind.retrieval.SearchResult;
 
 import lombok.RequiredArgsConstructor;
 
@@ -46,6 +49,12 @@ public class KnowledgeBaseController {
   @GetMapping("/{id}")
   public ResponseEntity<ApiResponse<KnowledgeBase>> get(@PathVariable Long id) {
     return ResponseEntity.ok(ApiResponse.success(knowledgeBaseService.getById(id)));
+  }
+
+  @PostMapping("/{id}/search")
+  public ResponseEntity<ApiResponse<List<SearchResult>>> search(
+      @PathVariable Long id, @RequestBody KnowledgeBaseSearchRequest request) {
+    return ResponseEntity.ok(ApiResponse.success(knowledgeBaseService.search(id, request)));
   }
 
   @PostMapping("/{id}/members")

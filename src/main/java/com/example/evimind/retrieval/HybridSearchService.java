@@ -1,13 +1,21 @@
 package com.example.evimind.retrieval;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
+
+import com.example.evimind.identity.GroupContext;
+import com.example.evimind.service.DocumentPermissionService;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,14 +31,30 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class HybridSearchService {
 
-  @Autowired private PgVectorSearchService pgVectorSearchService;
-  @Autowired private ElasticsearchSearchService elasticsearchSearchService;
-  @Autowired private RrfFusionService rrfFusionService;
+  private final PgVectorSearchService pgVectorSearchService;
+  private final ElasticsearchSearchService elasticsearchSearchService;
+  private final RrfFusionService rrfFusionService;
+  private final SimpleKeywordSearchService simpleKeywordSearchService;
+  private final QueryRewriteService queryRewriteService;
+  private final DocumentPermissionService documentPermissionService;
+  private final Executor retrievalExecutor;
 
-  @Autowired(required = false)
-  private SimpleKeywordSearchService simpleKeywordSearchService;
-
-  @Autowired private QueryRewriteService queryRewriteService;
+  public HybridSearchService(
+      PgVectorSearchService pgVectorSearchService,
+      ElasticsearchSearchService elasticsearchSearchService,
+      RrfFusionService rrfFusionService,
+      @Nullable SimpleKeywordSearchService simpleKeywordSearchService,
+      QueryRewriteService queryRewriteService,
+      DocumentPermissionService documentPermissionService,
+      @Qualifier("retrievalTaskExecutor") Executor retrievalExecutor) {
+    this.pgVectorSearchService = pgVectorSearchService;
+    this.elasticsearchSearchService = elasticsearchSearchService;
+    this.rrfFusionService = rrfFusionService;
+    this.simpleKeywordSearchService = simpleKeywordSearchService;
+    this.queryRewriteService = queryRewriteService;
+    this.documentPermissionService = documentPermissionService;
+    this.retrievalExecutor = retrievalExecutor;
+  }
 
   @Value("${custom.rag.search.backend-timeout-ms:1500}")
   private long backendTimeoutMillis = 1500;
@@ -59,15 +83,40 @@ public class HybridSearchService {
     int candidateK = Math.max(requestedTopK, Math.min(50, requestedTopK * 3));
 
     // Step 2: Parallel Hybrid Search
-    CompletableFuture<List<SearchResult>> semanticFuture =
-        CompletableFuture.supplyAsync(
+    FutureTask<List<SearchResult>> semanticFuture =
+        new FutureTask<>(
             () -> pgVectorSearchService.search(effectiveQuery, knowledgeBaseId, candidateK));
-    CompletableFuture<List<SearchResult>> keywordFuture =
-        CompletableFuture.supplyAsync(
+    FutureTask<List<SearchResult>> keywordFuture =
+        new FutureTask<>(
             () -> elasticsearchSearchService.search(effectiveQuery, knowledgeBaseId, candidateK));
+    List<SearchResult> semanticResults;
+    List<SearchResult> keywordResults;
+    try {
+      retrievalExecutor.execute(semanticFuture);
+      retrievalExecutor.execute(keywordFuture);
 
-    List<SearchResult> semanticResults = awaitResults("PgVector", semanticFuture);
-    List<SearchResult> keywordResults = awaitResults("Elasticsearch", keywordFuture);
+      long deadlineNanos =
+          System.nanoTime()
+              + TimeUnit.MILLISECONDS.toNanos(Math.max(1L, backendTimeoutMillis));
+      semanticResults = awaitResults("PgVector", semanticFuture, deadlineNanos);
+      keywordResults = awaitResults("Elasticsearch", keywordFuture, deadlineNanos);
+    } catch (RejectedExecutionException e) {
+      semanticFuture.cancel(true);
+      keywordFuture.cancel(true);
+      semanticResults = List.of();
+      keywordResults = List.of();
+      log.warn("Retrieval executor rejected backend search for KB {}", knowledgeBaseId);
+    }
+    Set<Long> readableDocumentIds =
+        readableDocumentIds(knowledgeBaseId, semanticResults, keywordResults);
+    semanticResults = filterReadableResults(semanticResults, readableDocumentIds);
+    keywordResults = filterReadableResults(keywordResults, readableDocumentIds);
+    if (Thread.currentThread().isInterrupted()) {
+      semanticFuture.cancel(true);
+      keywordFuture.cancel(true);
+      log.debug("Hybrid search interrupted for KB {}", knowledgeBaseId);
+      return List.of();
+    }
     boolean degraded = semanticResults.isEmpty() || keywordResults.isEmpty();
 
     // Fallback to simple keyword search if ES returned nothing and we have the local service
@@ -75,6 +124,9 @@ public class HybridSearchService {
       try {
         keywordResults =
             simpleKeywordSearchService.search(effectiveQuery, knowledgeBaseId, candidateK);
+        keywordResults =
+            filterReadableResults(
+                keywordResults, readableDocumentIds(knowledgeBaseId, keywordResults));
         log.debug("SimpleKeywordSearch returned {} results as fallback", keywordResults.size());
       } catch (Exception e) {
         log.warn("SimpleKeywordSearch fallback also failed", e);
@@ -98,9 +150,17 @@ public class HybridSearchService {
   }
 
   private List<SearchResult> awaitResults(
-      String backendName, CompletableFuture<List<SearchResult>> future) {
+      String backendName,
+      Future<List<SearchResult>> future,
+      long deadlineNanos) {
     try {
-      return future.get(backendTimeoutMillis, TimeUnit.MILLISECONDS);
+      long remainingNanos = Math.max(0L, deadlineNanos - System.nanoTime());
+      return future.get(remainingNanos, TimeUnit.NANOSECONDS);
+    } catch (InterruptedException e) {
+      future.cancel(true);
+      Thread.currentThread().interrupt();
+      log.debug("{} search interrupted", backendName);
+      return List.of();
     } catch (TimeoutException e) {
       future.cancel(true);
       log.warn("{} search timed out after {} ms", backendName, backendTimeoutMillis);
@@ -110,4 +170,35 @@ public class HybridSearchService {
       return List.of();
     }
   }
+
+  private Set<Long> readableDocumentIds(
+      Long knowledgeBaseId, List<SearchResult>... resultGroups) {
+    if (GroupContext.isAdmin()) {
+      return Set.of();
+    }
+    Long userId = GroupContext.getUserId();
+    if (userId == null) {
+      return Set.of();
+    }
+    Set<Long> documentIds = new java.util.LinkedHashSet<>();
+    for (List<SearchResult> resultGroup : resultGroups) {
+      for (SearchResult result : resultGroup) {
+        if (result.getDocumentId() != null) {
+          documentIds.add(result.getDocumentId());
+        }
+      }
+    }
+    return documentPermissionService.findReadableDocumentIds(knowledgeBaseId, documentIds, userId);
+  }
+
+  private List<SearchResult> filterReadableResults(
+      List<SearchResult> results, Set<Long> readableDocumentIds) {
+    if (GroupContext.isAdmin()) {
+      return results;
+    }
+    return results.stream()
+        .filter(result -> result.getDocumentId() != null && readableDocumentIds.contains(result.getDocumentId()))
+        .toList();
+  }
+
 }

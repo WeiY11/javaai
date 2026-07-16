@@ -7,10 +7,15 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.stereotype.Service;
 
+import com.example.evimind.config.AiClientResolver;
+
 import reactor.core.publisher.Flux;
 
 @Service
 public class ChatService {
+
+  private static final String MODEL_UNAVAILABLE =
+      "AI model not available. Please configure an AI provider.";
 
   private final Map<String, ChatClient> chatClients;
   private final ChatMemory chatMemory;
@@ -22,6 +27,9 @@ public class ChatService {
 
   public Flux<String> streamChat(String provider, String message, String sessionId) {
     ChatClient baseClient = resolveClient(provider);
+    if (baseClient == null) {
+      return Flux.just(MODEL_UNAVAILABLE);
+    }
 
     return baseClient
         .mutate()
@@ -37,6 +45,9 @@ public class ChatService {
 
   public String chatSync(String provider, String message, String sessionId) {
     ChatClient baseClient = resolveClient(provider);
+    if (baseClient == null) {
+      return MODEL_UNAVAILABLE;
+    }
 
     return baseClient
         .mutate()
@@ -50,10 +61,6 @@ public class ChatService {
   }
 
   private ChatClient resolveClient(String provider) {
-    ChatClient baseClient = chatClients.get(provider);
-    if (baseClient == null) {
-      baseClient = chatClients.values().iterator().next();
-    }
-    return baseClient;
+    return AiClientResolver.resolve(chatClients, provider);
   }
 }

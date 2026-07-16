@@ -2,13 +2,16 @@ package com.example.evimind.retrieval;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+
+import com.example.evimind.config.AiClientResolver;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,7 +32,14 @@ import lombok.extern.slf4j.Slf4j;
     matchIfMissing = true)
 public class PromptBasedReranker implements Reranker {
 
-  @Autowired private Map<String, ChatClient> chatClients;
+  private final Map<String, ChatClient> chatClients;
+  private final Executor llmExecutor;
+
+  public PromptBasedReranker(
+      Map<String, ChatClient> chatClients, @Qualifier("llmTaskExecutor") Executor llmExecutor) {
+    this.chatClients = chatClients;
+    this.llmExecutor = llmExecutor;
+  }
 
   @Value("${custom.rag.reranker.enabled:true}")
   private boolean enabled = true;
@@ -85,7 +95,9 @@ public class PromptBasedReranker implements Reranker {
         return result;
       }
     } catch (Exception e) {
-      log.warn("Reranker failed, falling back to original RRF order: {}", e.getMessage());
+      log.warn(
+          "Reranker failed, falling back to original RRF order ({})",
+          e.getClass().getSimpleName());
     }
 
     return candidates.stream().limit(topN).toList();
@@ -94,7 +106,9 @@ public class PromptBasedReranker implements Reranker {
   /** 批量打分：一次 LLM 调用评估所有候选的相关性。 */
   private List<Double> batchScore(String query, List<SearchResult> candidates) {
     ChatClient chatClient = resolveChatClient();
-    if (chatClient == null) return null;
+    if (chatClient == null) {
+      return List.of();
+    }
 
     StringBuilder promptBuilder = new StringBuilder();
     promptBuilder.append("你是一个文档相关性评估专家。请评估以下每个文档片段与用户查询的相关程度。\n\n");
@@ -117,7 +131,8 @@ public class PromptBasedReranker implements Reranker {
     String prompt = promptBuilder.toString();
 
     CompletableFuture<String> future =
-        CompletableFuture.supplyAsync(() -> chatClient.prompt().user(prompt).call().content());
+        CompletableFuture.supplyAsync(
+            () -> chatClient.prompt().user(prompt).call().content(), llmExecutor);
 
     try {
       String response = future.get(timeoutMs, TimeUnit.MILLISECONDS);
@@ -125,16 +140,18 @@ public class PromptBasedReranker implements Reranker {
     } catch (java.util.concurrent.TimeoutException e) {
       future.cancel(true);
       log.warn("Reranker timed out after {} ms", timeoutMs);
-      return null;
+      return List.of();
     } catch (Exception e) {
-      log.warn("Reranker LLM call failed", e);
-      return null;
+      log.warn("Reranker LLM call failed ({})", e.getClass().getSimpleName());
+      return List.of();
     }
   }
 
   /** 从 LLM 响应中解析分数数组。支持多种格式： - 标准 JSON 数组: [8, 5, 9] - 带解释的响应中提取数组 - 逗号分隔的数字 */
   private List<Double> parseScores(String response, int expectedCount) {
-    if (response == null || response.isBlank()) return null;
+    if (response == null || response.isBlank()) {
+      return List.of();
+    }
 
     // 尝试提取 JSON 数组部分
     String cleaned = response.trim();
@@ -164,17 +181,14 @@ public class PromptBasedReranker implements Reranker {
     // 验证：如果解析出的分数数量不匹配，返回 null
     if (scores.size() != expectedCount) {
       log.warn("Reranker score count mismatch: expected {}, got {}", expectedCount, scores.size());
-      return null;
+      return List.of();
     }
 
     return scores;
   }
 
   private ChatClient resolveChatClient() {
-    if (chatClients == null || chatClients.isEmpty()) return null;
-    if (chatClients.containsKey("deepseek")) {
-      return chatClients.get("deepseek");
-    }
-    return chatClients.values().iterator().next();
+    return AiClientResolver.resolve(chatClients, null);
   }
+
 }

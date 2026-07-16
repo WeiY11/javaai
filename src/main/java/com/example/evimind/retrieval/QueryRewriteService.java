@@ -3,13 +3,15 @@ package com.example.evimind.retrieval;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.example.evimind.config.AiClientResolver;
 import com.example.evimind.config.PromptTemplateManager;
 
 import lombok.extern.slf4j.Slf4j;
@@ -25,9 +27,18 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class QueryRewriteService {
 
-  @Autowired private PromptTemplateManager promptTemplateManager;
+  private final PromptTemplateManager promptTemplateManager;
+  private final Map<String, ChatClient> chatClients;
+  private final Executor llmExecutor;
 
-  @Autowired private Map<String, ChatClient> chatClients;
+  public QueryRewriteService(
+      PromptTemplateManager promptTemplateManager,
+      Map<String, ChatClient> chatClients,
+      @Qualifier("llmTaskExecutor") Executor llmExecutor) {
+    this.promptTemplateManager = promptTemplateManager;
+    this.chatClients = chatClients;
+    this.llmExecutor = llmExecutor;
+  }
 
   @Value("${custom.rag.query-rewrite.enabled:true}")
   private boolean enabled = true;
@@ -68,7 +79,9 @@ public class QueryRewriteService {
       log.debug("Query rewrite returned same result, using original query");
       return originalQuery;
     } catch (Exception e) {
-      log.warn("Query rewrite failed, falling back to original query: {}", e.getMessage());
+      log.warn(
+          "Query rewrite failed, falling back to original query ({})",
+          e.getClass().getSimpleName());
       return originalQuery;
     }
   }
@@ -88,7 +101,8 @@ public class QueryRewriteService {
 
     // 异步执行 LLM 调用，带超时控制
     CompletableFuture<String> future =
-        CompletableFuture.supplyAsync(() -> chatClient.prompt().user(prompt).call().content());
+        CompletableFuture.supplyAsync(
+            () -> chatClient.prompt().user(prompt).call().content(), llmExecutor);
 
     try {
       String result = future.get(timeoutMs, TimeUnit.MILLISECONDS);
@@ -98,7 +112,7 @@ public class QueryRewriteService {
       log.warn("Query rewrite timed out after {} ms", timeoutMs);
       return query;
     } catch (Exception e) {
-      log.warn("Query rewrite LLM call failed", e);
+      log.warn("Query rewrite LLM call failed ({})", e.getClass().getSimpleName());
       return query;
     }
   }
@@ -121,11 +135,7 @@ public class QueryRewriteService {
   }
 
   private ChatClient resolveChatClient() {
-    if (chatClients == null || chatClients.isEmpty()) return null;
-    // 优先使用 deepseek（成本低、速度快），否则取第一个可用的
-    if (chatClients.containsKey("deepseek")) {
-      return chatClients.get("deepseek");
-    }
-    return chatClients.values().iterator().next();
+    return AiClientResolver.resolve(chatClients, null);
   }
+
 }

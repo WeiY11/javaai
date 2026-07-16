@@ -35,8 +35,8 @@ public class KnowledgeGraphController {
   /** 获取指定实体的邻居节点和关系 */
   @GetMapping("/entities/{entityId}/neighbors")
   public ResponseEntity<ApiResponse<Map<String, Object>>> getNeighbors(
-      @PathVariable Long entityId) {
-    Map<String, Object> neighbors = knowledgeGraphService.getNeighbors(entityId);
+      @PathVariable Long kbId, @PathVariable Long entityId) {
+    Map<String, Object> neighbors = knowledgeGraphService.getNeighbors(kbId, entityId);
     return ResponseEntity.ok(ApiResponse.success(neighbors));
   }
 
@@ -47,7 +47,7 @@ public class KnowledgeGraphController {
       @RequestParam Long source,
       @RequestParam Long target,
       @RequestParam(defaultValue = "3") int maxHops) {
-    List<Map<String, Object>> path = knowledgeGraphService.findPath(source, target, maxHops);
+    List<Map<String, Object>> path = knowledgeGraphService.findPath(kbId, source, target, maxHops);
     return ResponseEntity.ok(ApiResponse.success(path));
   }
 }

@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -34,7 +35,9 @@ public class DocumentPermissionService {
   @Transactional
   public void grantOwnerPermission(Long documentId) {
     Long userId = GroupContext.getUserId();
-    if (userId == null) return;
+    if (userId == null) {
+      throw new AuthenticationCredentialsNotFoundException("Not authenticated");
+    }
 
     grantPermission(documentId, userId, PERM_ADMIN, userId);
   }
@@ -85,6 +88,9 @@ public class DocumentPermissionService {
 
   /** 要求用户对文档有指定权限，否则抛出异常。 */
   public void requirePermission(Long documentId, Long userId, String permissionType) {
+    if (userId == null) {
+      throw new AuthenticationCredentialsNotFoundException("Not authenticated");
+    }
     if (!hasPermission(documentId, userId, permissionType)) {
       throw new SecurityException("无权访问该文档（需要 " + permissionType + " 权限）");
     }
@@ -111,6 +117,15 @@ public class DocumentPermissionService {
   public Set<Long> getReadableDocumentIds(Long userId) {
     List<Long> ids = permissionMapper.findPermittedDocumentIds(userId, PERM_READ);
     return new HashSet<>(ids);
+  }
+
+  public Set<Long> findReadableDocumentIds(
+      Long knowledgeBaseId, Collection<Long> documentIds, Long userId) {
+    if (documentIds == null || documentIds.isEmpty() || userId == null) {
+      return Set.of();
+    }
+    return new HashSet<>(
+        documentMapper.findReadableDocumentIds(knowledgeBaseId, documentIds, userId));
   }
 
   /** 获取用户有 ADMIN 权限的文档 ID 集合。 */

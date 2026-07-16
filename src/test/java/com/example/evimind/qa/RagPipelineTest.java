@@ -25,6 +25,7 @@ import com.example.evimind.identity.GroupContext;
 import com.example.evimind.mapper.DocumentMapper;
 import com.example.evimind.mapper.KbMemberMapper;
 import com.example.evimind.mapper.KnowledgeBaseMapper;
+import com.example.evimind.model.dto.StreamEvent;
 import com.example.evimind.model.entity.KnowledgeBase;
 import com.example.evimind.retrieval.HybridSearchService;
 import com.example.evimind.retrieval.Reranker;
@@ -171,8 +172,7 @@ class RagPipelineTest {
     when(hybridSearchService.search(anyString(), eq(1L), eq(10), isNull())).thenReturn(results);
     when(promptTemplateManager.render(eq("evidence-sufficient-prompt"), anyMap()))
         .thenReturn("prompt");
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.values()).thenReturn(List.of(chatClient));
+    when(chatClients.get("deepseek")).thenReturn(chatClient);
     when(chatClient.prompt().user(anyString()).call().content()).thenReturn("answer");
     when(documentMapper.selectBatchIds(anyCollection())).thenReturn(List.of());
 
@@ -199,6 +199,24 @@ class RagPipelineTest {
     when(knowledgeBaseMapper.selectById(1L)).thenReturn(null);
 
     assertThrows(IllegalArgumentException.class, () -> ragPipeline.query("test", 1L));
+  }
+
+  @Test
+  void streamQueryShouldNotExposeInternalSearchFailures() {
+    KnowledgeBase kb = new KnowledgeBase();
+    kb.setId(1L);
+    when(kbMemberMapper.selectCount(any())).thenReturn(1L);
+    when(knowledgeBaseMapper.selectById(1L)).thenReturn(kb);
+    when(hybridSearchService.search(anyString(), eq(1L), eq(10), isNull()))
+        .thenThrow(new RuntimeException("database password is confidential"));
+
+    List<String> events =
+        ragPipeline
+            .streamQuery("query", 1L, null, null, null, null, null, null, null, null)
+            .collectList()
+            .block();
+
+    assertEquals(List.of(StreamEvent.error("Search failed. Please try again.")), events);
   }
 
   @Test
@@ -232,8 +250,7 @@ class RagPipelineTest {
     when(reranker.rerank(eq("test query"), eq(fusedResults), eq(5))).thenReturn(rerankedResults);
     when(promptTemplateManager.render(eq("evidence-sufficient-prompt"), anyMap()))
         .thenReturn("prompt");
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.values()).thenReturn(List.of(chatClient));
+    when(chatClients.get("deepseek")).thenReturn(chatClient);
     when(chatClient.prompt().user(anyString()).call().content()).thenReturn("answer");
     when(documentMapper.selectBatchIds(anyCollection())).thenReturn(List.of());
 

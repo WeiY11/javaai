@@ -8,7 +8,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Description;
 
-import com.example.evimind.retrieval.HybridSearchService;
+import com.example.evimind.identity.GroupContext;
+import com.example.evimind.knowledgebase.KnowledgeBaseSearchRequest;
+import com.example.evimind.knowledgebase.KnowledgeBaseService;
 import com.example.evimind.retrieval.SearchResult;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -25,7 +27,7 @@ public class AgentTools {
   private static final int MAX_TOP_K = 10;
   private static final int MAX_TOOL_OUTPUT_CHARS = 4000;
 
-  private final HybridSearchService hybridSearchService;
+  private final KnowledgeBaseService knowledgeBaseService;
 
   public record KbSearchRequest(
       @JsonProperty(required = true) @JsonPropertyDescription("用户查询文本") String query,
@@ -38,10 +40,15 @@ public class AgentTools {
   @Description("在指定知识库中检索相关文档内容。当用户提问涉及知识库信息时，调用此工具进行语义和关键词混合检索。")
   public Function<KbSearchRequest, KbSearchResponse> kbSearch() {
     return request -> {
+      if (GroupContext.getUserId() == null) {
+        return new KbSearchResponse(null, "Authentication required.");
+      }
       try {
         int topK = Math.min(MAX_TOP_K, request.topK() > 0 ? request.topK() : DEFAULT_TOP_K);
-        List<SearchResult> results =
-            hybridSearchService.search(request.query(), request.knowledgeBaseId(), topK);
+        KnowledgeBaseSearchRequest searchRequest = new KnowledgeBaseSearchRequest();
+        searchRequest.setQuery(request.query());
+        searchRequest.setTopK(topK);
+        List<SearchResult> results = knowledgeBaseService.search(request.knowledgeBaseId(), searchRequest);
 
         if (results.isEmpty()) {
           return new KbSearchResponse("未找到相关内容", null);
@@ -49,9 +56,15 @@ public class AgentTools {
 
         String resultText = formatResults(results);
         return new KbSearchResponse(limitOutput(resultText), null);
+      } catch (SecurityException e) {
+        log.warn(
+            "KB_SEARCH access denied for knowledge base {} and user {}",
+            request.knowledgeBaseId(),
+            GroupContext.getUserId());
+        return new KbSearchResponse(null, "Access denied.");
       } catch (Exception e) {
-        log.error("KB_SEARCH tool failed", e);
-        return new KbSearchResponse(null, "检索失败: " + e.getMessage());
+        log.error("KB_SEARCH tool failed ({})", e.getClass().getSimpleName());
+        return new KbSearchResponse(null, "Search failed. Please try again.");
       }
     };
   }

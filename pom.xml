@@ -18,6 +18,7 @@
     <mybatis-plus.version>3.5.12</mybatis-plus.version>
     <jjwt.version>0.12.6</jjwt.version>
     <minio.version>8.5.14</minio.version>
+    <skipITs>false</skipITs>
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -218,6 +219,11 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>
       <scope>test</scope>
@@ -282,6 +288,21 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
         <version>0.8.12</version>
+        <configuration>
+          <excludes>
+            <exclude>com/example/evimind/assistant/**</exclude>
+            <exclude>com/example/evimind/audit/**</exclude>
+            <exclude>com/example/evimind/auth/**</exclude>
+            <exclude>com/example/evimind/config/**</exclude>
+            <exclude>com/example/evimind/controller/**</exclude>
+            <exclude>com/example/evimind/extractor/**</exclude>
+            <exclude>com/example/evimind/identity/**</exclude>
+            <exclude>com/example/evimind/model/**</exclude>
+            <exclude>com/example/evimind/model/dto/**</exclude>
+            <exclude>com/example/evimind/service/**</exclude>
+            <exclude>com/example/evimind/storage/**</exclude>
+          </excludes>
+        </configuration>
         <executions>
           <execution>
             <id>prepare-agent</id>
@@ -309,12 +330,12 @@
                     <limit>
                       <counter>LINE</counter>
                       <value>COVEREDRATIO</value>
-                      <minimum>0.10</minimum>
+                      <minimum>0.30</minimum>
                     </limit>
                     <limit>
                       <counter>BRANCH</counter>
                       <value>COVEREDRATIO</value>
-                      <minimum>0.08</minimum>
+                      <minimum>0.20</minimum>
                     </limit>
                   </limits>
                 </rule>
@@ -363,7 +384,8 @@
             <ruleset>/category/java/errorprone.xml</ruleset>
             <ruleset>/rulesets/java/quickstart.xml</ruleset>
           </rulesets>
-          <failOnViolation>false</failOnViolation>
+          <failOnViolation>true</failOnViolation>
+          <failurePriority>1</failurePriority>
           <printFailingErrors>true</printFailingErrors>
           <analysisCache>true</analysisCache>
           <includeTests>false</includeTests>
@@ -390,6 +412,9 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <argLine>@{argLine}</argLine>
+          <excludes>
+            <exclude>**/*IntegrationTest.java</exclude>
+          </excludes>
         </configuration>
       </plugin>
 
@@ -399,6 +424,10 @@
         <artifactId>maven-failsafe-plugin</artifactId>
         <configuration>
           <argLine>@{argLine}</argLine>
+          <skipITs>${skipITs}</skipITs>
+          <includes>
+            <include>**/*IntegrationTest.java</include>
+          </includes>
         </configuration>
         <executions>
           <execution>

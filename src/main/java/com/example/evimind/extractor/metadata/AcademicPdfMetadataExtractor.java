@@ -144,7 +144,7 @@ public class AcademicPdfMetadataExtractor {
       if (refIdx >= 0) break;
     }
 
-    if (refIdx < 0) return null;
+    if (refIdx < 0) return List.of();
 
     List<String> refs = new ArrayList<>();
     String refSection = text.substring(refIdx);
@@ -155,6 +155,6 @@ public class AcademicPdfMetadataExtractor {
       refs.add(m.group().trim());
       count++;
     }
-    return refs.isEmpty() ? null : refs;
+    return refs;
   }
 }

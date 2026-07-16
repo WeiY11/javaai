@@ -5,10 +5,11 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.util.Map;
+import java.util.concurrent.Executor;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
@@ -23,7 +24,14 @@ class QueryRewriteServiceTest {
   @Mock private PromptTemplateManager promptTemplateManager;
   @Mock private Map<String, ChatClient> chatClients;
 
-  @InjectMocks private QueryRewriteService queryRewriteService;
+  private QueryRewriteService queryRewriteService;
+
+  @BeforeEach
+  void setUp() {
+    Executor directExecutor = Runnable::run;
+    queryRewriteService =
+        new QueryRewriteService(promptTemplateManager, chatClients, directExecutor);
+  }
 
   @Test
   void shouldSkipRewriteWhenDisabled() {
@@ -62,8 +70,6 @@ class QueryRewriteServiceTest {
     ReflectionTestUtils.setField(queryRewriteService, "maxHistoryMessages", 10);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.containsKey("deepseek")).thenReturn(true);
     when(chatClients.get("deepseek")).thenReturn(chatClient);
     when(promptTemplateManager.render(eq("query-rewrite-prompt"), anyMap()))
         .thenReturn("rewrite prompt");
@@ -81,8 +87,6 @@ class QueryRewriteServiceTest {
     ReflectionTestUtils.setField(queryRewriteService, "maxHistoryMessages", 10);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.containsKey("deepseek")).thenReturn(true);
     when(chatClients.get("deepseek")).thenReturn(chatClient);
     when(promptTemplateManager.render(eq("query-rewrite-prompt"), anyMap()))
         .thenReturn("rewrite prompt");
@@ -100,8 +104,6 @@ class QueryRewriteServiceTest {
     ReflectionTestUtils.setField(queryRewriteService, "maxHistoryMessages", 10);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.containsKey("deepseek")).thenReturn(true);
     when(chatClients.get("deepseek")).thenReturn(chatClient);
     when(promptTemplateManager.render(eq("query-rewrite-prompt"), anyMap()))
         .thenReturn("rewrite prompt");
@@ -120,8 +122,6 @@ class QueryRewriteServiceTest {
     ReflectionTestUtils.setField(queryRewriteService, "maxHistoryMessages", 3);
 
     ChatClient chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-    when(chatClients.isEmpty()).thenReturn(false);
-    when(chatClients.containsKey("deepseek")).thenReturn(true);
     when(chatClients.get("deepseek")).thenReturn(chatClient);
     when(promptTemplateManager.render(eq("query-rewrite-prompt"), anyMap()))
         .thenReturn("rewrite prompt");

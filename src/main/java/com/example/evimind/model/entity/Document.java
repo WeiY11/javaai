@@ -25,6 +25,22 @@ public class Document {
 
   private String ingestionStatus;
 
+  private String failedStage;
+
+  private String errorCode;
+
+  private String errorMessage;
+
+  private Integer retryCount;
+
+  private LocalDateTime startedAt;
+
+  private LocalDateTime finishedAt;
+
+  private Integer ingestionVersion;
+
+  private Integer activeIngestionVersion;
+
   private Integer chunkCount;
 
   private Long uploaderId;

@@ -5,6 +5,8 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.example.evimind.identity.GroupContext;
+import com.example.evimind.knowledgebase.KnowledgeBaseService;
 import com.example.evimind.mapper.KgEntityMapper;
 import com.example.evimind.mapper.KgRelationMapper;
 import com.example.evimind.model.entity.KgEntity;
@@ -21,11 +23,19 @@ public class KnowledgeGraphService {
 
   private final KgEntityMapper entityMapper;
   private final KgRelationMapper relationMapper;
+  private final KnowledgeBaseService knowledgeBaseService;
+  private final DocumentPermissionService documentPermissionService;
 
   /** 获取知识库的完整图谱数据（实体 + 关系）。 */
   public Map<String, Object> getGraph(Long knowledgeBaseId) {
-    List<KgEntity> entities = entityMapper.findByKnowledgeBaseId(knowledgeBaseId);
-    List<KgRelation> relations = relationMapper.findByKnowledgeBaseId(knowledgeBaseId);
+    requireKnowledgeBaseAccess(knowledgeBaseId);
+    List<KgEntity> entities =
+        filterReadableEntities(knowledgeBaseId, entityMapper.findByKnowledgeBaseId(knowledgeBaseId));
+    List<KgRelation> relations =
+        filterReadableRelations(
+            knowledgeBaseId,
+            relationMapper.findByKnowledgeBaseId(knowledgeBaseId),
+            entityIds(entities));
 
     List<Map<String, Object>> nodes =
         entities.stream()
@@ -63,14 +73,25 @@ public class KnowledgeGraphService {
   }
 
   /** 获取指定实体的邻居节点和关系。 */
-  public Map<String, Object> getNeighbors(Long entityId) {
-    KgEntity entity = entityMapper.selectById(entityId);
-    if (entity == null) {
-      throw new IllegalArgumentException("Entity not found: " + entityId);
-    }
+  public Map<String, Object> getNeighbors(Long knowledgeBaseId, Long entityId) {
+    requireKnowledgeBaseAccess(knowledgeBaseId);
+    KgEntity entity = requireReadableEntityInKnowledgeBase(knowledgeBaseId, entityId);
 
-    List<KgEntity> neighbors = entityMapper.findNeighbors(entityId);
-    List<KgRelation> relations = relationMapper.findByEntityId(entityId);
+    List<KgEntity> neighbors =
+        filterReadableEntities(
+            knowledgeBaseId,
+            entityMapper.findNeighbors(entityId).stream()
+                .filter(neighbor -> knowledgeBaseId.equals(neighbor.getKnowledgeBaseId()))
+                .toList());
+    Set<Long> visibleEntityIds = entityIds(neighbors);
+    visibleEntityIds.add(entityId);
+    List<KgRelation> relations =
+        filterReadableRelations(
+            knowledgeBaseId,
+            relationMapper.findByEntityId(entityId).stream()
+                .filter(relation -> knowledgeBaseId.equals(relation.getKnowledgeBaseId()))
+                .toList(),
+            visibleEntityIds);
 
     // 构建关系方向信息
     List<Map<String, Object>> connections = new ArrayList<>();
@@ -81,19 +102,17 @@ public class KnowledgeGraphService {
       if (rel.getSourceEntityId().equals(entityId)) {
         conn.put("direction", "outgoing");
         KgEntity target = entityMapper.selectById(rel.getTargetEntityId());
-        if (target != null) {
-          conn.put("neighborId", target.getId());
-          conn.put("neighborName", target.getName());
-          conn.put("neighborType", target.getEntityType());
-        }
+        if (target == null || !knowledgeBaseId.equals(target.getKnowledgeBaseId())) continue;
+        conn.put("neighborId", target.getId());
+        conn.put("neighborName", target.getName());
+        conn.put("neighborType", target.getEntityType());
       } else {
         conn.put("direction", "incoming");
         KgEntity source = entityMapper.selectById(rel.getSourceEntityId());
-        if (source != null) {
-          conn.put("neighborId", source.getId());
-          conn.put("neighborName", source.getName());
-          conn.put("neighborType", source.getEntityType());
-        }
+        if (source == null || !knowledgeBaseId.equals(source.getKnowledgeBaseId())) continue;
+        conn.put("neighborId", source.getId());
+        conn.put("neighborName", source.getName());
+        conn.put("neighborType", source.getEntityType());
       }
       connections.add(conn);
     }
@@ -127,15 +146,14 @@ public class KnowledgeGraphService {
   }
 
   /** BFS 多跳路径搜索：从 sourceEntity 到 targetEntity 的最短路径。 最大搜索深度由 maxHops 控制。 */
-  public List<Map<String, Object>> findPath(Long sourceEntityId, Long targetEntityId, int maxHops) {
+  public List<Map<String, Object>> findPath(
+      Long knowledgeBaseId, Long sourceEntityId, Long targetEntityId, int maxHops) {
+    requireKnowledgeBaseAccess(knowledgeBaseId);
     if (maxHops <= 0) maxHops = 3;
     if (maxHops > 6) maxHops = 6;
 
-    KgEntity source = entityMapper.selectById(sourceEntityId);
-    KgEntity target = entityMapper.selectById(targetEntityId);
-    if (source == null || target == null) {
-      throw new IllegalArgumentException("Source or target entity not found");
-    }
+    requireReadableEntityInKnowledgeBase(knowledgeBaseId, sourceEntityId);
+    requireReadableEntityInKnowledgeBase(knowledgeBaseId, targetEntityId);
 
     // BFS
     Queue<List<Long>> queue = new LinkedList<>();
@@ -156,12 +174,32 @@ public class KnowledgeGraphService {
         return buildPathResult(path, parentRelation);
       }
 
-      List<KgRelation> relations = relationMapper.findByEntityId(current);
+      List<KgRelation> relations =
+          relationMapper.findByEntityId(current).stream()
+              .filter(relation -> knowledgeBaseId.equals(relation.getKnowledgeBaseId()))
+              .toList();
+      Map<Long, KgEntity> nextEntities = new HashMap<>();
+      for (KgRelation relation : relations) {
+        Long next =
+            relation.getSourceEntityId().equals(current)
+                ? relation.getTargetEntityId()
+                : relation.getSourceEntityId();
+        KgEntity nextEntity = entityMapper.selectById(next);
+        if (nextEntity != null && knowledgeBaseId.equals(nextEntity.getKnowledgeBaseId())) {
+          nextEntities.put(next, nextEntity);
+        }
+      }
+      Set<Long> visibleEntityIds = entityIds(filterReadableEntities(knowledgeBaseId, nextEntities.values()));
+      visibleEntityIds.add(current);
+      relations = filterReadableRelations(knowledgeBaseId, relations, visibleEntityIds);
       for (KgRelation rel : relations) {
         Long next =
             rel.getSourceEntityId().equals(current)
                 ? rel.getTargetEntityId()
                 : rel.getSourceEntityId();
+
+        KgEntity nextEntity = nextEntities.get(next);
+        if (nextEntity == null || !visibleEntityIds.contains(next)) continue;
 
         if (!visited.contains(next)) {
           visited.add(next);
@@ -180,12 +218,87 @@ public class KnowledgeGraphService {
 
   /** 获取知识库图谱的统计信息。 */
   public Map<String, Object> getStats(Long knowledgeBaseId) {
-    List<KgEntity> entities = entityMapper.findByKnowledgeBaseId(knowledgeBaseId);
-    List<KgRelation> relations = relationMapper.findByKnowledgeBaseId(knowledgeBaseId);
+    requireKnowledgeBaseAccess(knowledgeBaseId);
+    List<KgEntity> entities =
+        filterReadableEntities(knowledgeBaseId, entityMapper.findByKnowledgeBaseId(knowledgeBaseId));
+    List<KgRelation> relations =
+        filterReadableRelations(
+            knowledgeBaseId,
+            relationMapper.findByKnowledgeBaseId(knowledgeBaseId),
+            entityIds(entities));
     return buildStats(entities, relations);
   }
 
   // ==================== 内部方法 ====================
+
+  private void requireKnowledgeBaseAccess(Long knowledgeBaseId) {
+    if (knowledgeBaseService.getById(knowledgeBaseId) == null) {
+      throw new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId);
+    }
+  }
+
+  private KgEntity requireEntityInKnowledgeBase(Long knowledgeBaseId, Long entityId) {
+    KgEntity entity = entityMapper.selectById(entityId);
+    if (entity == null || !knowledgeBaseId.equals(entity.getKnowledgeBaseId())) {
+      throw new IllegalArgumentException("Entity not found in knowledge base");
+    }
+    return entity;
+  }
+
+  private KgEntity requireReadableEntityInKnowledgeBase(Long knowledgeBaseId, Long entityId) {
+    KgEntity entity = requireEntityInKnowledgeBase(knowledgeBaseId, entityId);
+    if (filterReadableEntities(knowledgeBaseId, List.of(entity)).isEmpty()) {
+      throw new SecurityException("Access denied: entity belongs to a restricted document");
+    }
+    return entity;
+  }
+
+  private List<KgEntity> filterReadableEntities(
+      Long knowledgeBaseId, Collection<KgEntity> entities) {
+    if (GroupContext.isAdmin()) {
+      return List.copyOf(entities);
+    }
+    Set<Long> readableDocumentIds =
+        readableDocumentIds(
+            knowledgeBaseId,
+            entities.stream().map(KgEntity::getDocumentId).filter(Objects::nonNull).toList());
+    return entities.stream()
+        .filter(
+            entity ->
+                entity.getDocumentId() != null && readableDocumentIds.contains(entity.getDocumentId()))
+        .toList();
+  }
+
+  private List<KgRelation> filterReadableRelations(
+      Long knowledgeBaseId, Collection<KgRelation> relations, Set<Long> visibleEntityIds) {
+    if (GroupContext.isAdmin()) {
+      return List.copyOf(relations);
+    }
+    Set<Long> readableDocumentIds =
+        readableDocumentIds(
+            knowledgeBaseId,
+            relations.stream().map(KgRelation::getDocumentId).filter(Objects::nonNull).toList());
+    return relations.stream()
+        .filter(
+            relation ->
+                relation.getDocumentId() != null
+                    && readableDocumentIds.contains(relation.getDocumentId())
+                    && visibleEntityIds.contains(relation.getSourceEntityId())
+                    && visibleEntityIds.contains(relation.getTargetEntityId()))
+        .toList();
+  }
+
+  private Set<Long> readableDocumentIds(Long knowledgeBaseId, Collection<Long> documentIds) {
+    if (documentIds.isEmpty() || GroupContext.getUserId() == null) {
+      return Set.of();
+    }
+    return documentPermissionService.findReadableDocumentIds(
+        knowledgeBaseId, new HashSet<>(documentIds), GroupContext.getUserId());
+  }
+
+  private Set<Long> entityIds(Collection<KgEntity> entities) {
+    return entities.stream().map(KgEntity::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+  }
 
   private Map<String, Object> buildStats(List<KgEntity> entities, List<KgRelation> relations) {
     Map<String, Object> stats = new LinkedHashMap<>();

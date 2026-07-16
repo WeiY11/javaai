@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.example.evimind.mapper.ConversationMapper;
+import com.example.evimind.assistant.ConversationService;
 import com.example.evimind.mapper.MessageMapper;
 import com.example.evimind.model.entity.Conversation;
 import com.example.evimind.model.entity.Message;
@@ -19,13 +19,12 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ConversationExportService {
 
-  private final ConversationMapper conversationMapper;
+  private final ConversationService conversationService;
   private final MessageMapper messageMapper;
   private static final ObjectMapper objectMapper = new ObjectMapper();
 
   public String exportAsMarkdown(Long conversationId) {
-    Conversation conv = conversationMapper.selectById(conversationId);
-    if (conv == null) return "";
+    Conversation conv = conversationService.getOwnedConversation(conversationId);
 
     List<Message> messages =
         messageMapper.selectList(
@@ -54,8 +53,7 @@ public class ConversationExportService {
   }
 
   public String exportAsJson(Long conversationId) {
-    Conversation conv = conversationMapper.selectById(conversationId);
-    if (conv == null) return "{}";
+    Conversation conv = conversationService.getOwnedConversation(conversationId);
 
     List<Message> messages =
         messageMapper.selectList(

@@ -42,10 +42,6 @@ public class ConversationController {
       }
     }
 
-    if (provider == null || provider.isBlank()) {
-      provider = "deepseek";
-    }
-
     return ResponseEntity.ok(
         ApiResponse.success(conversationService.createConversation(kbId, provider)));
   }

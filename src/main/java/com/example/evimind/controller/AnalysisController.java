@@ -83,7 +83,7 @@ public class AnalysisController {
   public ApiResponse<Map<String, Object>> startDirBatchAnalysis(
       @RequestBody Map<String, String> body) throws IOException {
     String dir = body.getOrDefault("dir", "");
-    String provider = body.getOrDefault("provider", "deepseek");
+    String provider = body.get("provider");
 
     Path dirPath = safePath(dir);
     File folder = dirPath.toFile();
@@ -170,7 +170,7 @@ public class AnalysisController {
 
               if (!extraction.isSuccess()) {
                 itemResult.setSuccess(false);
-                itemResult.setError("无法提取文件内容: " + extraction.getErrorMessage());
+                itemResult.setError("File extraction failed.");
                 results.add(itemResult);
                 completed++;
                 batchProgressService.updateProgress(taskId, file.getName(), completed);
@@ -215,7 +215,7 @@ public class AnalysisController {
 
             } catch (Exception e) {
               itemResult.setSuccess(false);
-              itemResult.setError("分析失败: " + e.getMessage());
+              itemResult.setError("Analysis failed. Please retry.");
             }
 
             results.add(itemResult);
@@ -253,7 +253,7 @@ public class AnalysisController {
       safePath(path);
     }
 
-    String provider = request.getProvider() != null ? request.getProvider() : "deepseek";
+    String provider = request.getProvider();
     String sessionId =
         request.getSessionId() != null ? request.getSessionId() : "batch-" + UUID.randomUUID();
 
@@ -290,7 +290,7 @@ public class AnalysisController {
 
               if (!extraction.isSuccess()) {
                 itemResult.setSuccess(false);
-                itemResult.setError("无法提取文件内容: " + extraction.getErrorMessage());
+                itemResult.setError("File extraction failed.");
                 results.add(itemResult);
                 completed++;
                 batchProgressService.updateProgress(taskId, file.getName(), completed);
@@ -336,7 +336,7 @@ public class AnalysisController {
 
             } catch (Exception e) {
               itemResult.setSuccess(false);
-              itemResult.setError("分析失败: " + e.getMessage());
+              itemResult.setError("Analysis failed. Please retry.");
             }
 
             results.add(itemResult);

@@ -3,7 +3,7 @@ package com.example.evimind.extractor;
 import java.util.Collections;
 import java.util.Map;
 
-public class ExtractionResult {
+public final class ExtractionResult {
 
   private final boolean success;
   private final String content;

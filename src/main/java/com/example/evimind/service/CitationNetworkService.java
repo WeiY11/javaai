@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.evimind.identity.GroupContext;
+import com.example.evimind.knowledgebase.KnowledgeBaseService;
 import com.example.evimind.mapper.CitationLinkMapper;
 import com.example.evimind.mapper.DocumentMapper;
 import com.example.evimind.model.entity.CitationLink;
@@ -24,6 +26,8 @@ public class CitationNetworkService {
 
   private final CitationLinkMapper citationLinkMapper;
   private final DocumentMapper documentMapper;
+  private final KnowledgeBaseService knowledgeBaseService;
+  private final DocumentPermissionService documentPermissionService;
 
   // DOI pattern: 10.XXXX/...
   private static final Pattern DOI_PATTERN = Pattern.compile("10\\.\\d{4,}/\\S+");
@@ -105,6 +109,9 @@ public class CitationNetworkService {
    * @return 该文档的引用链接列表
    */
   public List<CitationLink> getCitationsForDocument(Long documentId) {
+    Document document = requireDocumentKnowledgeBaseAccess(documentId);
+    requireKnowledgeBaseAccess(document.getKnowledgeBaseId());
+    requireReadableDocument(document);
     return citationLinkMapper.findByDocumentId(documentId);
   }
 
@@ -115,10 +122,18 @@ public class CitationNetworkService {
    * @return 包含 nodes 和 edges 的图结构
    */
   public Map<String, Object> getCitationGraph(Long knowledgeBaseId) {
-    List<CitationLink> allLinks = citationLinkMapper.findByKnowledgeBaseId(knowledgeBaseId);
+    requireKnowledgeBaseAccess(knowledgeBaseId);
+    List<CitationLink> citationLinks = citationLinkMapper.findByKnowledgeBaseId(knowledgeBaseId);
     List<Document> documents =
         documentMapper.selectList(
             new LambdaQueryWrapper<Document>().eq(Document::getKnowledgeBaseId, knowledgeBaseId));
+    documents = documents.stream().filter(this::canReadDocument).toList();
+    Set<Long> readableDocumentIds =
+        documents.stream().map(Document::getId).collect(Collectors.toSet());
+    List<CitationLink> allLinks =
+        citationLinks.stream()
+            .filter(link -> readableDocumentIds.contains(link.getDocumentId()))
+            .toList();
 
     // 构建节点集合
     Map<String, Map<String, Object>> nodeMap = new LinkedHashMap<>();
@@ -193,6 +208,8 @@ public class CitationNetworkService {
     if (doc == null) {
       throw new IllegalArgumentException("Document not found: " + documentId);
     }
+    requireKnowledgeBaseAccess(doc.getKnowledgeBaseId());
+    requireReadableDocument(doc);
 
     List<CitationLink> coCitations =
         citationLinkMapper.findCoCitations(documentId, doc.getKnowledgeBaseId());
@@ -204,9 +221,12 @@ public class CitationNetworkService {
     List<Map<String, Object>> result = new ArrayList<>();
     for (Map.Entry<Long, List<CitationLink>> entry : grouped.entrySet()) {
       Document coDoc = documentMapper.selectById(entry.getKey());
+      if (coDoc == null || !canReadDocument(coDoc)) {
+        continue;
+      }
       Map<String, Object> item = new LinkedHashMap<>();
       item.put("documentId", entry.getKey());
-      item.put("fileName", coDoc != null ? coDoc.getFileName() : "Unknown");
+      item.put("fileName", coDoc.getFileName());
       item.put("sharedCitations", entry.getValue().size());
 
       List<Map<String, String>> sharedRefs =
@@ -237,7 +257,21 @@ public class CitationNetworkService {
    * @return 统计数据
    */
   public Map<String, Object> getCitationStats(Long knowledgeBaseId) {
-    List<CitationLink> allLinks = citationLinkMapper.findByKnowledgeBaseId(knowledgeBaseId);
+    requireKnowledgeBaseAccess(knowledgeBaseId);
+    List<CitationLink> citationLinks = citationLinkMapper.findByKnowledgeBaseId(knowledgeBaseId);
+    Set<Long> readableDocumentIds =
+        documentMapper
+            .selectList(
+                new LambdaQueryWrapper<Document>()
+                    .eq(Document::getKnowledgeBaseId, knowledgeBaseId))
+            .stream()
+            .filter(this::canReadDocument)
+            .map(Document::getId)
+            .collect(Collectors.toSet());
+    List<CitationLink> allLinks =
+        citationLinks.stream()
+            .filter(link -> readableDocumentIds.contains(link.getDocumentId()))
+            .toList();
 
     Map<String, Object> stats = new LinkedHashMap<>();
     stats.put("totalCitationLinks", allLinks.size());
@@ -302,6 +336,36 @@ public class CitationNetworkService {
     stats.put("citationsWithoutDoi", allLinks.size() - withDoi);
 
     return stats;
+  }
+
+  private Document requireDocumentKnowledgeBaseAccess(Long documentId) {
+    Document document = documentMapper.selectById(documentId);
+    if (document == null) {
+      throw new IllegalArgumentException("Document not found: " + documentId);
+    }
+    if (document.getKnowledgeBaseId() == null) {
+      throw new SecurityException("Document is not associated with a knowledge base");
+    }
+    return document;
+  }
+
+  private void requireKnowledgeBaseAccess(Long knowledgeBaseId) {
+    if (knowledgeBaseService.getById(knowledgeBaseId) == null) {
+      throw new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId);
+    }
+  }
+
+  private boolean canReadDocument(Document document) {
+    return GroupContext.isAdmin()
+        || !documentPermissionService.hasRestrictions(document.getId())
+        || documentPermissionService.hasPermission(
+            document.getId(), GroupContext.getUserId(), DocumentPermissionService.PERM_READ);
+  }
+
+  private void requireReadableDocument(Document document) {
+    if (!canReadDocument(document)) {
+      throw new SecurityException("Access denied: document requires READ permission");
+    }
   }
 
   // ==================== 内部方法 ====================

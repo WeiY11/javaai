@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.time.LocalDateTime;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,18 +68,20 @@ public class AuthService {
 
   @Transactional
   public AuthResponse refreshToken(RefreshTokenRequest request) {
+    LocalDateTime now = LocalDateTime.now();
     String tokenHash = hashToken(request.getRefreshToken());
     RefreshToken rt =
         refreshTokenMapper.selectOne(
             new LambdaQueryWrapper<RefreshToken>()
                 .eq(RefreshToken::getTokenHash, tokenHash)
                 .eq(RefreshToken::getRevoked, false));
-    if (rt == null || rt.getExpiresAt().isBefore(LocalDateTime.now())) {
+    if (rt == null || !rt.getExpiresAt().isAfter(now)) {
       throw new IllegalArgumentException("Invalid or expired refresh token");
     }
 
-    rt.setRevoked(true);
-    refreshTokenMapper.updateById(rt);
+    if (refreshTokenMapper.consumeActiveToken(rt.getId(), now) != 1) {
+      throw new IllegalArgumentException("Invalid or expired refresh token");
+    }
 
     User user = userMapper.selectById(rt.getUserId());
     if (user == null || "DISABLED".equals(user.getStatus())) {
@@ -91,7 +94,7 @@ public class AuthService {
   public UserInfo getCurrentUser() {
     Long userId = GroupContext.getUserId();
     if (userId == null) {
-      throw new IllegalArgumentException("Not authenticated");
+      throw new AuthenticationCredentialsNotFoundException("Not authenticated");
     }
     User user = userMapper.selectById(userId);
     if (user == null) {

@@ -21,6 +21,8 @@ public class DocumentChunk {
 
   private Integer chunkIndex;
 
+  private Integer ingestionVersion;
+
   private String vectorId;
 
   @TableField(fill = FieldFill.INSERT)

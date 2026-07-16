@@ -33,11 +33,11 @@ public class EmbeddingService {
     }
     if (chunks.isEmpty()) return;
 
-    final int BATCH_SIZE = 100;
+    final int batchSize = 100;
     List<DocumentChunkEmbedding> allEmbeddings = new java.util.ArrayList<>();
 
-    for (int i = 0; i < chunks.size(); i += BATCH_SIZE) {
-      int end = Math.min(i + BATCH_SIZE, chunks.size());
+    for (int i = 0; i < chunks.size(); i += batchSize) {
+      int end = Math.min(i + batchSize, chunks.size());
       List<DocumentChunk> batchChunks = chunks.subList(i, end);
 
       List<String> texts =
@@ -47,7 +47,11 @@ public class EmbeddingService {
       try {
         vectors = embeddingModel.embed(texts);
       } catch (Exception e) {
-        log.error("Embedding API call failed for batch {}-{}", i, end, e);
+        log.error(
+            "Embedding API call failed for batch {}-{} ({})",
+            i,
+            end,
+            e.getClass().getSimpleName());
         throw new RuntimeException("Embedding generation failed", e);
       }
 

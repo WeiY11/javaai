@@ -61,6 +61,14 @@ CREATE TABLE IF NOT EXISTS document (
     file_size       BIGINT          NOT NULL,
     storage_path    VARCHAR(512)    NOT NULL,
     ingestion_status VARCHAR(32)   NOT NULL DEFAULT 'PENDING',
+    failed_stage    VARCHAR(32),
+    error_code      VARCHAR(64),
+    error_message   VARCHAR(1024),
+    retry_count     INT             NOT NULL DEFAULT 0,
+    started_at      TIMESTAMP,
+    finished_at     TIMESTAMP,
+    ingestion_version INT           NOT NULL DEFAULT 0,
+    active_ingestion_version INT,
     chunk_count     INT             DEFAULT 0,
     uploader_id     BIGINT          NOT NULL REFERENCES sys_user(id),
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -73,9 +81,13 @@ CREATE TABLE IF NOT EXISTS document_chunk (
     knowledge_base_id BIGINT       NOT NULL REFERENCES knowledge_base(id) ON DELETE CASCADE,
     content         TEXT            NOT NULL,
     chunk_index     INT             NOT NULL,
+    ingestion_version INT           NOT NULL DEFAULT 0,
     vector_id       VARCHAR(128),
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_document_chunk_version_index
+    ON document_chunk(document_id, ingestion_version, chunk_index);
 
 CREATE TABLE IF NOT EXISTS conversation (
     id              BIGSERIAL       PRIMARY KEY,

@@ -2,31 +2,54 @@ package com.example.evimind.service;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.evimind.config.AiClientResolver;
 import com.example.evimind.config.PromptTemplateManager;
+import com.example.evimind.identity.GroupContext;
+import com.example.evimind.knowledgebase.KnowledgeBaseService;
 import com.example.evimind.mapper.DocumentChunkMapper;
 import com.example.evimind.mapper.DocumentMapper;
 import com.example.evimind.model.entity.Document;
 import com.example.evimind.model.entity.DocumentChunk;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class LiteratureReviewService {
 
   private final DocumentMapper documentMapper;
   private final DocumentChunkMapper documentChunkMapper;
+  private final KnowledgeBaseService knowledgeBaseService;
+  private final DocumentPermissionService documentPermissionService;
   private final PromptTemplateManager promptTemplateManager;
   private final Map<String, ChatClient> chatClients;
+  private final Executor llmExecutor;
+
+  public LiteratureReviewService(
+      DocumentMapper documentMapper,
+      DocumentChunkMapper documentChunkMapper,
+      KnowledgeBaseService knowledgeBaseService,
+      DocumentPermissionService documentPermissionService,
+      PromptTemplateManager promptTemplateManager,
+      Map<String, ChatClient> chatClients,
+      @Qualifier("llmTaskExecutor") Executor llmExecutor) {
+    this.documentMapper = documentMapper;
+    this.documentChunkMapper = documentChunkMapper;
+    this.knowledgeBaseService = knowledgeBaseService;
+    this.documentPermissionService = documentPermissionService;
+    this.promptTemplateManager = promptTemplateManager;
+    this.chatClients = chatClients;
+    this.llmExecutor = llmExecutor;
+  }
 
   private static final long LLM_TIMEOUT_MS = 120_000;
   private static final int MAX_CHUNKS_PER_DOC = 5;
@@ -40,6 +63,9 @@ public class LiteratureReviewService {
    * @return LLM 生成的文献综述文本
    */
   public String generateReview(Long knowledgeBaseId, String topic) {
+    if (knowledgeBaseService.getById(knowledgeBaseId) == null) {
+      throw new IllegalArgumentException("Knowledge base not found: " + knowledgeBaseId);
+    }
     // 1. 查询知识库中有论文元数据（DOI、作者、年份）的文档
     List<Document> papers =
         documentMapper.selectList(
@@ -53,6 +79,7 @@ public class LiteratureReviewService {
                             .or()
                             .isNotNull(Document::getPublicationYear))
                 .orderByAsc(Document::getPublicationYear));
+    papers = papers.stream().filter(this::canReadDocument).toList();
 
     if (papers.isEmpty()) {
       log.warn("No papers with metadata found in knowledge base {}", knowledgeBaseId);
@@ -96,7 +123,8 @@ public class LiteratureReviewService {
 
     try {
       CompletableFuture<String> future =
-          CompletableFuture.supplyAsync(() -> chatClient.prompt().user(prompt).call().content());
+          CompletableFuture.supplyAsync(
+              () -> chatClient.prompt().user(prompt).call().content(), llmExecutor);
 
       String result = future.get(LLM_TIMEOUT_MS, TimeUnit.MILLISECONDS);
       log.info(
@@ -109,8 +137,8 @@ public class LiteratureReviewService {
       log.error("Literature review generation timed out after {} ms", LLM_TIMEOUT_MS);
       return "文献综述生成超时，请缩小研究主题范围或减少知识库中的论文数量后重试。";
     } catch (Exception e) {
-      log.error("Literature review generation failed", e);
-      return "文献综述生成失败：" + e.getMessage();
+      log.error("Literature review generation failed ({})", e.getClass().getSimpleName());
+      return "Literature review generation failed. Please try again.";
     }
   }
 
@@ -165,10 +193,13 @@ public class LiteratureReviewService {
 
   /** 解析可用的 ChatClient，优先使用 deepseek（成本低、速度快）。 */
   private ChatClient resolveChatClient() {
-    if (chatClients == null || chatClients.isEmpty()) return null;
-    if (chatClients.containsKey("deepseek")) {
-      return chatClients.get("deepseek");
-    }
-    return chatClients.values().iterator().next();
+    return AiClientResolver.resolve(chatClients, null);
+  }
+
+  private boolean canReadDocument(Document document) {
+    return GroupContext.isAdmin()
+        || !documentPermissionService.hasRestrictions(document.getId())
+        || documentPermissionService.hasPermission(
+            document.getId(), GroupContext.getUserId(), DocumentPermissionService.PERM_READ);
   }
 }
