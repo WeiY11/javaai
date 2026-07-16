@@ -1,0 +1,11 @@
+.env
+.env.*
+.git
+target/
+frontend/
+data/
+docs/build/
+.analysis-results/
+.analysis-reports/
+*.db
+*.log

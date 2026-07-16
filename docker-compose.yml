@@ -5,9 +5,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-evimind}
       POSTGRES_USER: ${POSTGRES_USER:-evimind}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-evimind123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,8 +24,8 @@ services:
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:9300:9300"
     volumes:
       - es_data:/usr/share/elasticsearch/data
       - ./docker/elasticsearch/plugins:/usr/share/elasticsearch/plugins
@@ -39,11 +39,11 @@ services:
     image: minio/minio:latest
     container_name: evimind-minio
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -63,18 +63,19 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-evimind}
       POSTGRES_USER: ${POSTGRES_USER:-evimind}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-evimind123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       ES_URIS: http://elasticsearch:9200
       MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-      JWT_SECRET: ${JWT_SECRET:-myDefaultJwtSecretKeyForDevOnlyPleaseReplaceInProduction2026}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      CUSTOM_MANAGEMENT_PROMETHEUS_REQUIRE_ADMIN: false
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
       QIANWEN_API_KEY: ${QIANWEN_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
