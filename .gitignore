@@ -14,6 +14,10 @@ frontend/node_modules/
 *.db
 .superpowers/
 
+# Python
+__pycache__/
+*.pyc
+
 # Code quality tool caches
 .pmd
 .pmd.cache
