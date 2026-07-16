@@ -113,7 +113,7 @@ EviMind 是一个面向文档知识库的 RAG 智能问答与证据分析平台�
 4. 登录成功后生成 access token 和 refresh token。
 5. refresh token 不明文保存，只保存 SHA-256 hash。
 6. 每个 API 请求经过 `JwtAuthenticationFilter`，解析 Bearer token，将用户身份写入上下文。
-7. `SecurityConfig` 设置无状态会话，并开放登录、注册、健康检查、Swagger 和前端静态资源。
+7. `SecurityConfig` 设置无状态会话，开放登录、注册、基础存活检查和前端静态资源；Swagger、详细诊断与 actuator 指标仅管理员可访问。
 
 面试可讲亮点：
 
@@ -503,7 +503,7 @@ value = 0.62 * confidence
 - Elasticsearch 可选，不可用时降级本地关键词检索。
 - 适合本地演示和开发。
 
-### 8.2 Docker Compose 生产式模式
+### 8.2 Docker Compose 完整本地模式
 
 服务：
 
@@ -515,15 +515,15 @@ value = 0.62 * confidence
 
 端口：
 
-- 后端：8080
+- 后端：8080，仅绑定到本机回环地址
 - 前端：5173 映射到容器 80
-- PostgreSQL：5432
-- Elasticsearch：9200/9300
-- MinIO：9000/9001
+- PostgreSQL：5432，仅绑定到本机回环地址
+- Elasticsearch：9200/9300，仅绑定到本机回环地址
+- MinIO：9000/9001，仅绑定到本机回环地址
 
 面试讲法：
 
-> 项目支持轻量本地运行和完整中间件部署两种模式。standalone 模式降低演示门槛，Docker Compose 模式更接近真实生产环境，能使用 PostgreSQL/pgvector、Elasticsearch 和 MinIO 完整能力。
+> 项目支持轻量本地运行和完整中间件集成验证两种模式。standalone 模式降低演示门槛，Docker Compose 模式提供 PostgreSQL/pgvector、Elasticsearch 和 MinIO 的完整本地协作环境；生产部署仍需在受控网络和密钥管理环境中配置。
 
 ## 9. 项目亮点
 

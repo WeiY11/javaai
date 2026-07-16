@@ -19,11 +19,13 @@ $env:DEEPSEEK_API_KEY = "your-key"   # Optional. AI chat is limited when unset.
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=standalone"
 ```
 
-Health check:
+Health probes:
 
 ```text
-http://localhost:8080/api/v1/health
+http://localhost:8080/actuator/health
 ```
+
+The detailed runtime diagnosis at `/api/v1/health` is available only to administrators after login.
 
 Start the frontend in another PowerShell window:
 
@@ -70,24 +72,28 @@ export DEEPSEEK_API_KEY=your-key      # Optional
 
 ### Option 3: Docker Compose
 
-Use this mode for a production-like stack with PostgreSQL, pgvector, Elasticsearch, MinIO, backend, and frontend containers.
+Use this mode for a full local stack with PostgreSQL, pgvector, Elasticsearch, MinIO, backend, and frontend containers.
 
 ```powershell
 cd D:\EviMind
 copy .env.example .env
-docker-compose up -d
+docker compose up -d
 ```
 
-Edit `.env` before production use. Set database, object storage, JWT, and AI provider values explicitly.
+Populate the required database, object-storage, and JWT secrets in `.env` before starting Docker Compose. The stack refuses to start when they are absent. Backend and infrastructure ports bind to `127.0.0.1`; the frontend remains available on port `5173`.
 
 ## Core Workflow
 
 ```text
 Upload document
+  -> UPLOADED
   -> extract text
   -> clean text
   -> split chunks
+  -> persist versioned chunks
   -> create embeddings and keyword index
+  -> enrich metadata/citations/knowledge graph
+  -> atomically activate the completed ingestion version
   -> ask a question
   -> hybrid retrieval
   -> RRF fusion
@@ -127,6 +133,13 @@ Swagger UI is available when the backend is running:
 http://localhost:8080/swagger-ui/index.html
 ```
 
+## Engineering Notes
+
+- Architecture: `docs/architecture.md`
+- Security: `docs/security.md`
+- RAG evaluation plan: `docs/rag-evaluation.md`
+- Current change log: `CHANGELOG.md`
+
 ## Configuration
 
 | Variable | Standalone | Docker/production | Notes |
@@ -135,13 +148,21 @@ http://localhost:8080/swagger-ui/index.html
 | `ZHIPU_API_KEY` | Optional | Optional | GLM provider |
 | `QIANWEN_API_KEY` | Optional | Optional | Qianwen provider |
 | `OPENAI_API_KEY` | Optional | Optional | OpenAI-compatible provider |
-| `JWT_SECRET` | Has default | Required | Replace the default outside local demos |
+| `JWT_SECRET` | Required | Required | At least 32 characters; no bundled development key outside local profiles |
 | `PORT` | Optional | Optional | Defaults to `8080` |
 | `CORS_ALLOWED_ORIGIN_PATTERNS` | Optional | Required when frontend origin changes | Example: `https://example.com,http://localhost:5173` |
 | `EMBEDDING_ENABLED` | Optional | Recommended | Defaults depend on profile |
 | `EMBEDDING_API_KEY` | Optional | Required when embeddings use an external provider | |
+| `EXTRACTOR_OCR_ENABLED` | Optional | Optional | Set to `true` to OCR image files and scanned PDFs |
+| `EXTRACTOR_OCR_TESSDATA_PATH` | Optional | Required when OCR is enabled | Tesseract language data directory |
+| `EXTRACTOR_OCR_LANGUAGE` | Optional | Optional | Defaults to `chi_sim+eng` |
+| `EXTRACTOR_PDF_MIN_NATIVE_TEXT_CHARS` | Optional | Optional | Defaults to `24`; below this threshold scanned PDFs use OCR or fail explicitly |
+| `EXTRACTOR_OCR_PDF_DPI` | Optional | Optional | Defaults to `220`; higher values improve OCR at higher CPU cost |
+| `EXTRACTOR_OCR_PDF_MAX_PAGES` | Optional | Optional | Defaults to `20`; bounds scanned-PDF OCR work |
 | `POSTGRES_*` | Not needed | Required | Docker/production database |
 | `MINIO_*` | Not needed | Required | Docker/production object storage |
+| `GRAFANA_ADMIN_USER` | Optional | Required for `docker-compose.grafana.yml` | Monitoring administrator username |
+| `GRAFANA_ADMIN_PASSWORD` | Optional | Required for `docker-compose.grafana.yml` | Monitoring administrator password |
 
 Standalone data files:
 
@@ -152,7 +173,7 @@ data\documents
 
 ## Tech Stack
 
-Backend: Spring Boot 3.5, Spring AI 1.0, MyBatis-Plus, Spring Security, JWT, Flyway, PostgreSQL/pgvector, Elasticsearch, MinIO, PDFBox, Apache POI, OpenPDF.
+Backend: Spring Boot 3.5, Spring AI 1.0, MyBatis-Plus, Spring Security, JWT, Flyway, PostgreSQL/pgvector, Elasticsearch, MinIO, PDFBox, Apache POI, Tess4J, OpenPDF.
 
 Frontend: Vue 3, TypeScript, Vite, Element Plus, Pinia, Markdown-It, Axios, SSE streaming.
 
@@ -185,8 +206,9 @@ EviMind/
 | Symptom | Fix |
 | --- | --- |
 | `JAVA_HOME not found` | Set `JAVA_HOME` to a local JDK 21+ path. |
-| Frontend API calls fail in dev mode | Start the backend first and confirm `http://localhost:8080/api/v1/health`. |
+| Frontend API calls fail in dev mode | Start the backend first and confirm `http://localhost:8080/actuator/health`. |
 | AI chat returns limited output | Set `DEEPSEEK_API_KEY` or another configured provider key. |
+| Scanned PDFs fail during extraction | Set `EXTRACTOR_OCR_ENABLED=true`, install Tesseract language data, and point `EXTRACTOR_OCR_TESSDATA_PATH` to that directory. |
 | Browser cannot access backend after deployment | Set `CORS_ALLOWED_ORIGIN_PATTERNS` to the frontend origin. |
 | Need a clean standalone database | Stop the app, back up `data\evimind-standalone.mv.db`, then remove it. |
 

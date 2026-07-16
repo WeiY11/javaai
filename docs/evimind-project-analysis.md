@@ -1409,7 +1409,7 @@ location /api/ {
 | 模式 | 数据库 | 存储 | ES | 适用场景 |
 |------|--------|------|-----|---------|
 | standalone/dev | H2本地(embedded) | 本地文件系统 | 可选降级到SimpleKeywordSearch | 本地演示、开发 |
-| Docker Compose | PostgreSQL+pgvector | MinIO | 完整Elasticsearch | 生产部署 |
+| Docker Compose | PostgreSQL+pgvector | MinIO | 完整Elasticsearch | 本地集成验证 |
 
 ---
 
@@ -1754,7 +1754,8 @@ Token刷新:
 | 模型 | GET | `/api/v1/models` | 获取可用模型列表 |
 | 分析 | POST | `/api/analysis/batch` | 批量分析 |
 | 导出 | GET | `/api/analysis/export/pdf` | PDF报告导出 |
-| 公共 | GET | `/api/v1/health` | 健康检查 |
+| 公共 | GET | `/actuator/health` | 基础存活检查 |
+| 管理员 | GET | `/api/v1/health` | 详细运行诊断 |
 
 ### C. 关键配置参数参考
 
