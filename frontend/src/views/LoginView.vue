@@ -1,33 +1,39 @@
 <template>
   <main class="auth-page">
-    <div class="auth-background">
-      <div class="glow-orb orb-1"></div>
-      <div class="glow-orb orb-2"></div>
-      <div class="glow-orb orb-3"></div>
-      <div class="glass-overlay"></div>
-    </div>
-
-    <section class="auth-hero">
+    <section class="auth-entry-panel">
       <div class="auth-brand">
         <span class="auth-logo">E</span>
-        <span class="auth-brand-text">EviMind Evidence Workspace</span>
+        <div>
+          <strong>EviMind</strong>
+          <span>Evidence Workspace</span>
+        </div>
       </div>
-      <h1 class="hero-title">把企业知识库、科研文档<br/>和 <span>AI 问答</span>放在同一个工作台里。</h1>
-      <p class="hero-desc">上传资料、构建知识库、追踪引用来源，并把分析结果沉淀为可复用的研究笔记。通过多模态 AI 赋能，打造属于你的顶级知识大脑。</p>
-      <div class="auth-metrics">
-        <div class="metric-glass"><strong>RAG</strong><span>混合检索与溯源</span></div>
-        <div class="metric-glass"><strong>25+</strong><span>支持文档格式</span></div>
-        <div class="metric-glass"><strong>4</strong><span>顶级模型供应商</span></div>
+
+      <div class="entry-copy">
+        <p class="eyebrow">账号入口</p>
+        <h1>登录后进入证据工作台</h1>
+        <p>{{ authModeSummary }}</p>
+      </div>
+
+      <div class="auth-checklist">
+        <div v-for="item in authChecklist" :key="item.label" class="auth-check-item">
+          <span class="status-dot" :class="{ muted: !item.ready }"></span>
+          <div>
+            <strong>{{ item.label }}</strong>
+            <small>{{ item.detail }}</small>
+          </div>
+        </div>
       </div>
     </section>
 
     <section class="auth-card-wrapper">
       <div class="auth-card">
         <div class="auth-card-header">
-          <p class="eyebrow">{{ isRegister ? 'CREATE ACCOUNT' : 'WELCOME BACK' }}</p>
+          <p class="eyebrow">{{ isRegister ? '创建账号' : '后端认证' }}</p>
           <h2>{{ isRegister ? '注册 EviMind' : '登录工作台' }}</h2>
-          <p class="subtitle">{{ isRegister ? '开始构建你的智能知识宇宙' : '输入账号密码以继续使用' }}</p>
+          <p class="subtitle">{{ credentialHint }}</p>
         </div>
+
         <el-form :model="form" label-position="top" @submit.prevent="handleSubmit" class="auth-form">
           <el-form-item label="用户名">
             <el-input v-model="form.username" placeholder="请输入用户名" size="large" class="modern-input" />
@@ -38,11 +44,20 @@
           <el-form-item v-if="isRegister" label="邮箱">
             <el-input v-model="form.email" placeholder="可选，用于团队协作通知" size="large" class="modern-input" />
           </el-form-item>
-          <el-button type="primary" size="large" :loading="loading" class="auth-submit" @click="handleSubmit">
-            {{ isRegister ? '注册并进入' : '登录' }}
-            <el-icon class="submit-icon" style="margin-left: 8px;"><ArrowRight /></el-icon>
+          <div class="auth-error-hint">{{ credentialHint }}</div>
+          <el-button
+            type="primary"
+            size="large"
+            :loading="loading"
+            :disabled="!canSubmit"
+            class="auth-submit"
+            @click="handleSubmit"
+          >
+            {{ submitLabel }}
+            <el-icon class="submit-icon"><ArrowRight /></el-icon>
           </el-button>
         </el-form>
+
         <div class="toggle-wrapper">
           <p class="toggle-text">
             {{ isRegister ? '已有账号？' : '还没有账号？' }}
@@ -57,32 +72,80 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth.store'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const isRegister = ref(false)
 const loading = ref(false)
 const form = reactive({ username: '', password: '', email: '' })
 
+const trimmedUsername = computed(() => form.username.trim())
+const trimmedEmail = computed(() => form.email.trim())
+const canSubmit = computed(() => trimmedUsername.value.length > 0 && form.password.trim().length > 0)
+
+const submitLabel = computed(() => (isRegister.value ? '注册并进入' : '登录工作台'))
+
+const safeRedirectTarget = computed(() => {
+  const redirect = Array.isArray(route.query.redirect) ? route.query.redirect[0] : route.query.redirect
+  if (typeof redirect !== 'string') return '/'
+
+  const isInternalPath =
+    redirect.startsWith('/') && !redirect.startsWith('//') && !redirect.startsWith('/login')
+  return isInternalPath ? redirect : '/'
+})
+
+const authModeSummary = computed(() =>
+  isRegister.value
+    ? '创建账号后进入工作台，后续知识库、文档和笔记都归属到当前用户。'
+    : '使用已有账号进入工作台，继续处理知识库、问答和研究输出。'
+)
+
+const credentialHint = computed(() => {
+  if (!trimmedUsername.value && !form.password.trim()) return '填写用户名和密码后才能提交。'
+  if (!trimmedUsername.value) return '用户名不能为空。'
+  if (!form.password.trim()) return '密码不能为空。'
+  if (isRegister.value && trimmedEmail.value) return `注册邮箱：${trimmedEmail.value}`
+  return isRegister.value ? '注册请求将交给后端认证接口处理。' : '凭据将交给后端认证接口校验。'
+})
+
+const authChecklist = computed(() => [
+  {
+    label: '工作台入口',
+    detail: isRegister.value ? '注册完成后进入项目总览' : '登录完成后回到上次请求页面',
+    ready: true
+  },
+  {
+    label: '后端认证',
+    detail: '账号、密码和会话令牌由后端接口处理',
+    ready: true
+  },
+  {
+    label: '凭据填写',
+    detail: canSubmit.value ? '用户名和密码已填写' : '等待用户名和密码',
+    ready: canSubmit.value
+  }
+])
+
 async function handleSubmit() {
-  if (!form.username.trim() || !form.password.trim()) {
+  if (!canSubmit.value) {
     ElMessage.warning('请填写用户名和密码')
     return
   }
   loading.value = true
   try {
     if (isRegister.value) {
-      await authStore.register(form.username.trim(), form.password, form.email.trim() || undefined)
+      await authStore.register(trimmedUsername.value, form.password, trimmedEmail.value || undefined)
     } else {
-      await authStore.login(form.username.trim(), form.password)
+      await authStore.login(trimmedUsername.value, form.password)
     }
     ElMessage.success('已进入 EviMind 工作台')
-    router.push('/')
+    router.push(safeRedirectTarget.value)
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || '认证失败，请检查账号信息')
   } finally {
@@ -95,206 +158,236 @@ async function handleSubmit() {
 .auth-page {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 1fr 500px;
-  position: relative;
-  overflow: hidden;
-  background: var(--bg);
+  grid-template-columns: minmax(0, 1fr) 460px;
+  gap: 48px;
+  align-items: center;
+  padding: 56px;
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.04), transparent 45%),
+    var(--bg);
 }
 
-.auth-background {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.glow-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.6;
-  animation: float 20s infinite ease-in-out alternate;
-}
-
-.orb-1 { top: -10%; left: -10%; width: 600px; height: 600px; background: rgba(79, 70, 229, 0.4); }
-.orb-2 { bottom: -10%; right: 20%; width: 500px; height: 500px; background: rgba(13, 148, 136, 0.3); animation-delay: -5s; }
-.orb-3 { top: 40%; left: 30%; width: 400px; height: 400px; background: rgba(244, 63, 94, 0.2); animation-delay: -10s; }
-
-.glass-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(80px);
-  -webkit-backdrop-filter: blur(80px);
-}
-
-html.is-dark .glass-overlay { background: rgba(9, 9, 11, 0.4); }
-
-.auth-hero {
-  position: relative;
-  z-index: 1;
-  padding: 80px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+.auth-entry-panel {
+  display: grid;
+  gap: 36px;
+  max-width: 760px;
 }
 
 .auth-brand {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 60px;
+  gap: 14px;
 }
 
 .auth-logo {
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--primary-strong), var(--evidence));
+  border-radius: var(--radius-sm);
+  background: var(--primary);
   color: white;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 28px;
-  box-shadow: var(--shadow-glow);
+  font-size: 26px;
 }
 
-.auth-brand-text {
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
+.auth-brand div {
+  display: grid;
+  gap: 2px;
+}
+
+.auth-brand strong {
   color: var(--text);
-}
-
-.hero-title {
-  font-size: 56px;
-  line-height: 1.15;
-  letter-spacing: -1.5px;
-  margin: 0 0 24px;
-  color: var(--text);
-  font-family: var(--font-display);
-}
-
-.hero-title span {
-  background: linear-gradient(135deg, var(--primary), var(--evidence));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.hero-desc {
   font-size: 18px;
-  line-height: 1.8;
-  color: var(--text-muted);
-  max-width: 600px;
-  margin: 0 0 48px;
 }
 
-.auth-metrics {
+.auth-brand span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.entry-copy {
+  display: grid;
+  gap: 14px;
+}
+
+.entry-copy h1 {
+  margin: 0;
+  max-width: 700px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: clamp(34px, 5vw, 56px);
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.entry-copy p:not(.eyebrow) {
+  max-width: 620px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.auth-checklist {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  max-width: 640px;
+  gap: 12px;
 }
 
-.metric-glass {
-  background: var(--surface);
-  backdrop-filter: blur(20px);
+.auth-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
 }
 
-.metric-glass:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow);
-  border-color: rgba(79, 70, 229, 0.3);
+.auth-check-item strong,
+.auth-check-item small {
+  display: block;
+  overflow-wrap: anywhere;
 }
 
-.metric-glass strong { display: block; font-family: var(--font-display); font-size: 28px; font-weight: 800; color: var(--text); }
-.metric-glass span { display: block; margin-top: 8px; font-size: 14px; color: var(--text-muted); font-weight: 500; }
+.auth-check-item strong {
+  color: var(--text);
+}
+
+.auth-check-item small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  margin-top: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--el-color-success);
+  box-shadow: 0 0 0 3px var(--el-color-success-light-9);
+}
+
+.status-dot.muted {
+  background: var(--el-color-warning);
+  box-shadow: 0 0 0 3px var(--el-color-warning-light-9);
+}
 
 .auth-card-wrapper {
-  position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px;
 }
 
 .auth-card {
   width: 100%;
   max-width: 420px;
+  padding: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   background: var(--surface-solid);
-  border-radius: 24px;
-  padding: 48px 40px;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow);
 }
 
-html.is-dark .auth-card {
-  background: rgba(24, 24, 27, 0.8);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.auth-card-header {
+  margin-bottom: 28px;
 }
 
-.auth-card-header { margin-bottom: 32px; }
+.auth-card h2 {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 30px;
+  letter-spacing: 0;
+}
 
-.auth-card h2 { margin: 0; font-size: 32px; letter-spacing: -1px; color: var(--text); font-family: var(--font-display); }
-.subtitle { margin: 8px 0 0; color: var(--text-soft); font-size: 15px; }
+.subtitle {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.6;
+}
 
 .auth-form :deep(.el-form-item__label) {
-  font-weight: 600;
   color: var(--text);
+  font-weight: 600;
   padding-bottom: 6px;
+}
+
+.auth-error-hint {
+  margin-top: -2px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .auth-submit {
   width: 100%;
-  margin-top: 16px;
   height: 48px;
-  font-size: 16px;
-  border-radius: var(--radius-sm);
+  margin-top: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
 }
 
-.submit-icon { font-size: 18px; }
+.submit-icon {
+  font-size: 18px;
+}
 
 .toggle-wrapper {
   margin-top: 24px;
-  text-align: center;
-  padding-top: 24px;
+  padding-top: 22px;
   border-top: 1px solid var(--border-soft);
+  text-align: center;
 }
 
-.toggle-text { color: var(--text-muted); font-size: 14px; }
+.toggle-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
 
 .toggle-link {
+  margin-left: 6px;
   color: var(--primary);
   font-weight: 600;
   text-decoration: none;
-  margin-left: 6px;
-  transition: color 0.2s;
 }
 
-.toggle-link:hover { color: var(--primary-strong); }
-
-@keyframes float {
-  0% { transform: translate(0, 0); }
-  50% { transform: translate(5%, 5%); }
-  100% { transform: translate(-5%, -5%); }
+.toggle-link:hover {
+  color: var(--primary-strong);
 }
 
 @media (max-width: 1100px) {
-  .auth-page { grid-template-columns: 1fr; }
-  .auth-hero { display: none; }
-  .auth-card-wrapper { min-height: 100vh; }
+  .auth-page {
+    grid-template-columns: 1fr;
+    padding: 32px;
+  }
+
+  .auth-card-wrapper {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .auth-page {
+    padding: 20px;
+  }
+
+  .auth-checklist {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-card {
+    padding: 24px;
+  }
 }
 </style>

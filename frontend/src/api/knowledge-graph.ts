@@ -65,8 +65,8 @@ export function getGraphStats(kbId: number): Promise<KgStats> {
   return get(`/knowledge-bases/${kbId}/graph/stats`)
 }
 
-export function getNeighbors(entityId: number): Promise<NeighborData> {
-  return get(`/knowledge-bases/0/graph/entities/${entityId}/neighbors`)
+export function getNeighbors(kbId: number, entityId: number): Promise<NeighborData> {
+  return get(`/knowledge-bases/${kbId}/graph/entities/${entityId}/neighbors`)
 }
 
 export function findPath(kbId: number, source: number, target: number, maxHops = 3): Promise<PathStep[]> {

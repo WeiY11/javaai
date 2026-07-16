@@ -1,11 +1,17 @@
 import type { Conversation, ChatMessage, Citation } from '../types/chat.types'
-import { get, post, put, del, rootGet } from '../utils/request'
+import { get, post, put, del, rootGet, authenticatedFetch } from '../utils/request'
+
+export interface AvailableModel {
+  provider: string
+  model: string
+  configured: boolean
+}
 
 export async function listConversations(): Promise<Conversation[]> {
   return get('/conversations')
 }
 
-export async function getModels(): Promise<any[]> {
+export async function getModels(): Promise<AvailableModel[]> {
   return rootGet('/models')
 }
 
@@ -55,10 +61,12 @@ export interface StreamOptions {
   reasoningEffort?: string
 }
 
-/**
- * 流式消息发送，支持 AbortController 中止。
- * 面试点：SSE 流的 AbortController 控制、ReadableStream 解析。
- */
+interface ParsedSseEvent {
+  id?: string
+  event?: string
+  data: string
+}
+
 export async function streamMessage(
   conversationId: number,
   content: string,
@@ -66,13 +74,9 @@ export async function streamMessage(
   params?: StreamOptions,
   signal?: AbortSignal
 ): Promise<void> {
-  const token = localStorage.getItem('accessToken')
-  const response = await fetch(`/api/v1/conversations/${conversationId}/messages/stream`, {
+  const response = await authenticatedFetch(`/api/v1/conversations/${conversationId}/messages/stream`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : ''
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content, ...params }),
     signal
   })
@@ -91,7 +95,46 @@ export async function streamMessage(
   }
 
   const decoder = new TextDecoder()
+  const seenEventIds = new Set<string>()
   let buffer = ''
+  let doneReceived = false
+
+  const handleBlock = (block: string) => {
+    const parsed = parseSseBlock(block)
+    if (!parsed || !parsed.data) return
+    if (parsed.id) {
+      if (seenEventIds.has(parsed.id)) return
+      seenEventIds.add(parsed.id)
+    }
+
+    if (parsed.event === 'error') {
+      callbacks.onError(parsed.data)
+      return
+    }
+
+    try {
+      const event = JSON.parse(parsed.data)
+      switch (event.type) {
+        case 'token':
+          callbacks.onToken(event.text || '')
+          break
+        case 'citations':
+          callbacks.onCitations(event.citations || [])
+          break
+        case 'done':
+          doneReceived = true
+          callbacks.onDone(event.messageId)
+          break
+        case 'error':
+          callbacks.onError(event.message || 'Unknown error')
+          break
+      }
+    } catch {
+      if (parsed.event === 'message') {
+        callbacks.onToken(parsed.data)
+      }
+    }
+  }
 
   try {
     while (true) {
@@ -99,46 +142,60 @@ export async function streamMessage(
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed) continue
-
-        let data = trimmed
-        if (trimmed.startsWith('data:')) {
-          data = trimmed.substring(5).trim()
-        }
-
-        if (!data) continue
-
-        try {
-          const event = JSON.parse(data)
-          switch (event.type) {
-            case 'token':
-              callbacks.onToken(event.text || '')
-              break
-            case 'citations':
-              callbacks.onCitations(event.citations || [])
-              break
-            case 'done':
-              callbacks.onDone(event.messageId)
-              break
-            case 'error':
-              callbacks.onError(event.message || 'Unknown error')
-              break
-          }
-        } catch {
-          // Skip non-JSON data lines
-        }
+      buffer = buffer.replace(/\r\n/g, '\n')
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        const block = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        handleBlock(block)
+        boundary = buffer.indexOf('\n\n')
       }
+    }
+
+    buffer += decoder.decode()
+    if (buffer.trim()) {
+      handleBlock(buffer)
+    }
+
+    if (!doneReceived && !signal?.aborted) {
+      callbacks.onError('Stream ended before done event')
     }
   } catch (e: any) {
     if (e.name === 'AbortError' || signal?.aborted) {
-      // 用户主动中止，不算错误
       return
     }
-    throw e
+    callbacks.onError(e.message || 'Network stream failed')
+  } finally {
+    reader.releaseLock()
   }
+}
+
+function parseSseBlock(block: string): ParsedSseEvent | null {
+  const event: ParsedSseEvent = { data: '' }
+  const dataLines: string[] = []
+  let sawField = false
+
+  for (const rawLine of block.split('\n')) {
+    if (!rawLine || rawLine.startsWith(':')) continue
+    const separator = rawLine.indexOf(':')
+    const field = separator >= 0 ? rawLine.slice(0, separator) : rawLine
+    const value = separator >= 0 ? rawLine.slice(separator + 1).replace(/^ /, '') : ''
+    switch (field) {
+      case 'id':
+        sawField = true
+        event.id = value
+        break
+      case 'event':
+        sawField = true
+        event.event = value
+        break
+      case 'data':
+        sawField = true
+        dataLines.push(value)
+        break
+    }
+  }
+
+  event.data = sawField ? dataLines.join('\n') : block.trim()
+  return event.data || event.event ? event : null
 }

@@ -10,6 +10,12 @@ const router = createRouter({
     },
     {
       path: '/',
+      name: 'Dashboard',
+      component: () => import('../views/DashboardView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/chat',
       name: 'Chat',
       component: () => import('../views/ChatView.vue'),
       meta: { requiresAuth: true }
@@ -59,12 +65,19 @@ const router = createRouter({
   ]
 })
 
+function safeRedirectTarget(redirect: unknown): string {
+  const target = Array.isArray(redirect) ? redirect[0] : redirect
+  if (typeof target !== 'string') return '/'
+  if (!target.startsWith('/') || target.startsWith('//') || target.startsWith('/login')) return '/'
+  return target
+}
+
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('accessToken')
   if (to.meta.requiresAuth && !token) {
-    next('/login')
+    next({ path: '/login', query: { redirect: to.fullPath } })
   } else if (to.path === '/login' && token) {
-    next('/')
+    next(safeRedirectTarget(to.query.redirect))
   } else {
     next()
   }

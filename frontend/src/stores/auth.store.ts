@@ -30,11 +30,18 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn.value = false
   }
 
-  async function fetchUser() {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('auth:logout', logout)
+  }
+
+  async function fetchUser(): Promise<boolean> {
     try {
       user.value = await authApi.getCurrentUser()
+      isLoggedIn.value = true
+      return true
     } catch {
       logout()
+      return false
     }
   }
 

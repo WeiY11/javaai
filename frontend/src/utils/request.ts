@@ -1,12 +1,61 @@
-import axios from 'axios'
+import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import type { ApiResponse } from '../types/api.types'
 
-function attachAuth(config: any) {
-  const token = localStorage.getItem('accessToken')
+type RetriableRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean }
+
+function accessToken() {
+  return localStorage.getItem('accessToken')
+}
+
+function refreshToken() {
+  return localStorage.getItem('refreshToken')
+}
+
+function clearTokensAndRedirect() {
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
+  window.dispatchEvent(new Event('auth:logout'))
+  if (window.location.pathname !== '/login') {
+    const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const loginRedirectUrl = `/login?redirect=${encodeURIComponent(currentPath)}`
+    window.location.href = loginRedirectUrl
+  }
+}
+
+function attachAuth(config: InternalAxiosRequestConfig) {
+  const token = accessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
+}
+
+let refreshPromise: Promise<string> | null = null
+
+async function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const token = refreshToken()
+      if (!token) {
+        throw new Error('No refresh token')
+      }
+      const res = await axios.post<ApiResponse<{ accessToken: string; refreshToken: string }>>(
+        '/api/v1/auth/refresh',
+        { refreshToken: token }
+      )
+      const nextAccessToken = res.data.data.accessToken
+      const nextRefreshToken = res.data.data.refreshToken
+      localStorage.setItem('accessToken', nextAccessToken)
+      localStorage.setItem('refreshToken', nextRefreshToken)
+      return nextAccessToken
+    })().catch(error => {
+      clearTokensAndRedirect()
+      throw error
+    }).finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
 }
 
 const request = axios.create({
@@ -21,74 +70,59 @@ export const rootRequest = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
-request.interceptors.request.use(attachAuth)
-rootRequest.interceptors.request.use(attachAuth)
-
-let isRefreshing = false
-let refreshSubscribers: Array<(token: string) => void> = []
-
-function onTokenRefreshed(token: string) {
-  refreshSubscribers.forEach(cb => cb(token))
-  refreshSubscribers = []
-}
-
-function addRefreshSubscriber(cb: (token: string) => void) {
-  refreshSubscribers.push(cb)
-}
-
-request.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        return new Promise(resolve => {
-          addRefreshSubscriber((token: string) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`
-            resolve(request(originalRequest))
-          })
-        })
+function installAuthInterceptors(instance: AxiosInstance) {
+  instance.interceptors.request.use(attachAuth)
+  instance.interceptors.response.use(
+    response => response,
+    async (error: AxiosError) => {
+      const originalRequest = error.config as RetriableRequestConfig | undefined
+      if (error.response?.status !== 401 || !originalRequest || originalRequest._retry) {
+        return Promise.reject(error)
       }
 
       originalRequest._retry = true
-      isRefreshing = true
-
       try {
-        const refreshToken = localStorage.getItem('refreshToken')
-        if (!refreshToken) throw new Error('No refresh token')
-
-        const res = await axios.post('/api/v1/auth/refresh', { refreshToken })
-        const { accessToken, refreshToken: newRefresh } = res.data.data
-        localStorage.setItem('accessToken', accessToken)
-        localStorage.setItem('refreshToken', newRefresh)
-
-        onTokenRefreshed(accessToken)
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`
-        return request(originalRequest)
-      } catch {
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
-        window.location.href = '/login'
-        return Promise.reject(error)
-      } finally {
-        isRefreshing = false
+        const token = await refreshAccessToken()
+        originalRequest.headers.Authorization = `Bearer ${token}`
+        return instance(originalRequest)
+      } catch (refreshError) {
+        return Promise.reject(refreshError)
       }
     }
-    return Promise.reject(error)
-  }
-)
+  )
+}
 
-rootRequest.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      window.location.href = '/login'
-    }
-    return Promise.reject(error)
+installAuthInterceptors(request)
+installAuthInterceptors(rootRequest)
+
+export async function authenticatedFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {}
+): Promise<Response> {
+  return authenticatedFetchOnce(input, init, false)
+}
+
+async function authenticatedFetchOnce(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  retried: boolean
+): Promise<Response> {
+  const headers = new Headers(init.headers)
+  const token = accessToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
   }
-)
+
+  const response = await fetch(input, { ...init, headers })
+  if (response.status !== 401 || retried) {
+    return response
+  }
+
+  const nextToken = await refreshAccessToken()
+  const retryHeaders = new Headers(init.headers)
+  retryHeaders.set('Authorization', `Bearer ${nextToken}`)
+  return fetch(input, { ...init, headers: retryHeaders })
+}
 
 export async function get<T>(url: string, params?: Record<string, any>): Promise<T> {
   const res = await request.get<ApiResponse<T>>(url, { params })

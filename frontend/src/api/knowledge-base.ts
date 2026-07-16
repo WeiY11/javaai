@@ -1,4 +1,10 @@
-import type { KnowledgeBase, KbMember, PageResult } from '../types/knowledge-base.types'
+import type {
+  KnowledgeBase,
+  KnowledgeBaseSearchRequest,
+  KnowledgeBaseSearchResult,
+  KbMember,
+  PageResult
+} from '../types/knowledge-base.types'
 import { get, post, put, del } from '../utils/request'
 
 export async function listKnowledgeBases(page = 1, size = 100): Promise<PageResult<KnowledgeBase>> {
@@ -19,6 +25,13 @@ export async function deleteKnowledgeBase(id: number): Promise<void> {
 
 export async function getKnowledgeBase(id: number): Promise<KnowledgeBase> {
   return get(`/knowledge-bases/${id}`)
+}
+
+export async function searchKnowledgeBase(
+  id: number,
+  data: KnowledgeBaseSearchRequest
+): Promise<KnowledgeBaseSearchResult[]> {
+  return post(`/knowledge-bases/${id}/search`, data)
 }
 
 export async function addMember(kbId: number, userId: number, role = 'MEMBER'): Promise<KbMember> {

@@ -21,4 +21,21 @@ export interface KbMember {
   joinedAt: string
 }
 
+export interface KnowledgeBaseSearchRequest {
+  query: string
+  topK?: number
+  conversationHistory?: string
+  rerank?: boolean
+}
+
+export interface KnowledgeBaseSearchResult {
+  chunkId: string
+  documentId: number
+  knowledgeBaseId: number
+  content: string
+  chunkIndex: number
+  score: number
+  source: string
+}
+
 export type { PageResult } from './common.types'
